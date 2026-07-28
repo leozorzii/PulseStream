@@ -1,6 +1,4 @@
-Estrutura de pastas e para que serve
-
-
+Estrutura de Pastas
 pulsestream/
 ├── .github/
 │   └── workflows/
