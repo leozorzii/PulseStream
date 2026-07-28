@@ -1,3 +1,39 @@
+# Environment
 .env
+.env.local
 venv/
-__pycache__
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+static_root/
+*.log
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
