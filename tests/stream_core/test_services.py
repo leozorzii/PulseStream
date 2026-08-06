@@ -1,7 +1,9 @@
 import pytest
+from django.utils import timezone
 from apps.stream_core.services import create_content_source
+from apps.stream_core.services import  bulk_create_raw_posts
 from django.core.exceptions import ValidationError
-from apps.stream_core.models import ContentSource
+from apps.stream_core.models import ContentSource, RawPost
 
 
 @pytest.mark.django_db
@@ -33,5 +35,19 @@ def test_not_create_content_source_duplicate():
             name="Canal BitGamer",
             plataform="YOUTUBE",
             external_id="UC123bitgamer")
+        
+
+#Insere varios registros no banco de uma so vez
+@pytest.mark.django_db
+def test_bulk_create_raw_posts_creates_multiple():
+    fonte = create_content_source(name="Canal", plataform="YOUTUBE", external_id="UC_bulk")
     
+    posts_data = [
+        {"external_id": "p1", "text_content": "primeiro", "published_at": timezone.now()},
+        {"external_id": "p2", "text_content": "segundo", "published_at": timezone.now()}
+    ]
+    
+    bulk_create_raw_posts(source=fonte, posts_data=posts_data)
+    
+    assert RawPost.objects.count() == 2
     

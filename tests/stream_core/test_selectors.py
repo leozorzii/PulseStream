@@ -5,6 +5,8 @@ from apps.stream_core.selectors import get_active_sources
 from apps.stream_core.selectors import get_unprocessed_posts
 from apps.stream_core.models import ContentSource
 from apps.stream_core.models import RawPost
+#CORRECAO: removido o import de bulk_create_raw_posts - ela virou service,
+#entao o teste dela foi para tests/stream_core/test_services.py
 
 
 
@@ -24,7 +26,7 @@ def test_get_active_source_atives():
     
 @pytest.mark.django_db
 def test_get_unprocessed_posts_returns_only_unprocessed():
-    #Arrange - primeiro a fonte por que os posts precisam dela
+    #Arrange(cenario) - primeiro a fonte por que os posts precisam dela
     fonte = create_content_source(name="Canal", plataform="YOUTUBE", external_id="UC_test")
     
     #para um post nao processado
@@ -44,9 +46,13 @@ def test_get_unprocessed_posts_returns_only_unprocessed():
         published_at = timezone.now(),
         is_processed = True,
      )
-    #Act
+    #Act(executa)
     response = get_unprocessed_posts()
     
-    #assert
+    #assert(verfiica se o resultado bateu)
     assert response.count() == 1
     assert response.first().external_id == "post_pending"
+    
+    
+
+    
