@@ -107,8 +107,8 @@ PulseStream is under **active development**. This section is kept honest — it 
 
 **Phase 1 — Domain & Persistence** (`stream_core`) ⬜
 
-- [ ] Selectors (`get_active_sources`, `get_unprocessed_posts`, ...)
-- [ ] Services (`create_content_source`, `bulk_create_raw_posts`, ...)
+- [x] Selectors (`get_active_sources`, `get_unprocessed_posts`, ...)
+- [x] Services (`create_content_source`, `bulk_create_raw_posts`, ...)
 
 **Phase 2 — Ingestion / ETL** (`ingestion`) ⬜
 
