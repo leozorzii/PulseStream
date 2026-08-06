@@ -15,7 +15,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # Third-party
     'rest_framework',
-    'stream_core'
+    'apps.stream_core'
 ]
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

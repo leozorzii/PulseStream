@@ -13,13 +13,13 @@ class ContentSource(models.Model):
     
     
     def __str__(self):
-        return f"{self.name} ({self.get_platform_display()})"
+        return f"{self.name} ({self.get_plataform_display()})"
     
 
 class RawPost(models.Model):
     source = models.ForeignKey(
         ContentSource,
-        on_delete=models.CASCADE,
+        on_delete=models.CASCADE, #Se a fonte for deletada, os posts dela vao junto
         related_name="posts"
     )
     external_id = models.CharField(max_length=255, unique=True)
