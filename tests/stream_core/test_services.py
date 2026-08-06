@@ -2,8 +2,9 @@ import pytest
 from django.utils import timezone
 from apps.stream_core.services import create_content_source
 from apps.stream_core.services import  bulk_create_raw_posts
+from apps.stream_core.services import  save_sentiment_analysis
 from django.core.exceptions import ValidationError
-from apps.stream_core.models import ContentSource, RawPost
+from apps.stream_core.models import ContentSource, RawPost, SentimentAnalysis
 
 
 @pytest.mark.django_db
@@ -51,3 +52,16 @@ def test_bulk_create_raw_posts_creates_multiple():
     
     assert RawPost.objects.count() == 2
     
+@pytest.mark.django_db
+def test_save_sentiment_analysis_creates_and_mark_as_processed():
+    fonte = create_content_source(name="Canal", plataform="YOUTUBE", external_id="UC_x")
+    post = RawPost.objects.create(
+        source = fonte, external_id = "post_x", text_content = "video otimo",
+        published_at=timezone.now(), is_processed=False,
+    )
+    
+    save_sentiment_analysis(post=post, polarity_score=0.8, label="POS", keywords=["video", "otimo"])
+    
+    post.refresh_from_db() # recarrega o db
+    assert post.is_processed is True  # se o post ja foi marcado como processado
+    assert SentimentAnalysis.objects.count() == 1  # analise foi criada  como feita
