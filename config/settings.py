@@ -5,6 +5,16 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR / "apps"))
 
+
+SECRET_KEY = 'django-insecure-1^nej1%%roup9b2f_+1&go55(!exxx5edte9tgm6_$hh3+rvo8'
+WSGI_APPLICATION = 'config.wsgi.application' 
+ROOT_URLCONF = 'config.urls'
+DEBUG = True
+
+
+STATIC_URL = 'static/'
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
 INSTALLED_APPS = [
    # Apps nativas do Django...
     'django.contrib.admin',
@@ -47,3 +57,9 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+
+LANGUAGE_CODE = 'pt-br'          
+TIME_ZONE = 'America/Sao_Paulo'  
+USE_I18N = True
+USE_TZ = True
