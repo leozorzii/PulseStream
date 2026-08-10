@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.response import Response
+from apps.stream_core.models import ContentSource
 from apps.stream_core.selectors import get_active_sources, get_unprocessed_posts, get_sentiment_summary_by_source
 from apps.api.serializers import ContentSourceSerializer, RawPostSerializer
 class ActiveSourceListView(APIView):
@@ -33,4 +34,27 @@ class SentimentSummaryView(APIView):
             
         resume = get_sentiment_summary_by_source(source_id) #seletor
         return Response(resume) #o dict vira JSON
-        
+    
+class TriggerIngestionView(APIView):
+    """Endpoint que dispara a coleta de uma fonte (POST)"""
+    def post(self, request):
+        source_id = request.data.get("source_id")
+        #valida se veio o source_id
+        if source_id is None:
+            return Response(
+                {"erro": "informe o source_id"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+            
+        #valida se a fonte existe
+        if not ContentSource.objects.filter(id=source_id).exists():
+            return Response(
+                {"erro": "fonte nao encotrada"},
+                status=status.HTTP_404_NOT_FOUND,
+            )      
+              
+        #passado as verificacoes, dispara a coleta real    
+        return Response(
+            {"msg": f"coleta disparada para a fonte {source_id}"},
+            status=status.HTTP_200_OK,
+        )

@@ -1,9 +1,10 @@
 import pytest
 from rest_framework.test import APIClient
-from apps.stream_core.models import SentimentAnalysis
+from apps.stream_core.models import SentimentAnalysis, RawPost
 from apps.stream_core.services import create_content_source
-from apps.stream_core.models import RawPost
 from django.utils import timezone
+
+#----------------------POSTS---------------------------
 
 @pytest.mark.django_db
 def test_list_posts_unprocessed():
@@ -27,7 +28,7 @@ def test_list_posts_unprocessed():
     
 @pytest.mark.django_db
 def test_summary_one_source():
-    fonte = create_content_source(name="Canal", plataform="YOUTUBE", external_id="sum")
+    fonte = create_content_source(name="Canal", plataform="YOUTUBE", external_id="UC_sum")
     #cria os posts
     for i, lbl in enumerate(["POS", "NEG"]):
         post = RawPost.objects.create(
@@ -49,3 +50,32 @@ def test_summary_without_source_id_returns_400():
     response = client.get("/api/analytics/summary/")
     
     assert response.status_code == 400
+  
+  
+  # ----------------Trigger---------------------------  
+    
+@pytest.mark.django_db 
+def test_trigger_ingestion_valid_source():
+    fonte = create_content_source(name="Canal", plataform="YOUTUBE", external_id="UC_trig")
+    client = APIClient()
+    response = client.post(
+        "/api/ingestion/trigger/",
+        {"source_id": fonte.id},
+        format="json"
+        )
+    assert response.status_code == 200
+    
+    
+@pytest.mark.django_db
+def test_trigger_without_source_id_returns_400():
+    client = APIClient()
+    response = client.post("/api/ingestion/trigger/", {}, format="json")
+    assert response.status_code == 400
+    
+@pytest.mark.django_db
+def test_trigger_without_source_returns_404():
+    client = APIClient()
+    response = client.post("/api/ingestion/trigger/", {"source_id": 999999}, format="json")
+    assert response.status_code == 404
+    
+    
