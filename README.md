@@ -126,7 +126,7 @@ PulseStream is under **active development**. This section is kept honest — it 
 
 **Phase 4 — REST API** (`api`) ⬜
 
-- [ ] Serializers, views & endpoints
+- [x] Serializers, views & endpoints
 
 **Phase 5 — MCP Server** (`mcp_server`) ⬜
 
