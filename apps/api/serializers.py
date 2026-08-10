@@ -15,3 +15,4 @@ class RawPostSerializer(serializers.ModelSerializer):
     class Meta:
         model = RawPost
         fields = ["id", "source", "external_id", "text_content", "published_at", "is_processed"]
+        
