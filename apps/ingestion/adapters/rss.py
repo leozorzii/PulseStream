@@ -4,6 +4,7 @@ from datetime import datetime, timezone as dt_timezone
 import feedparser
 from apps.ingestion.adapters.base import BaseAdapter
 
+
 #herda do contrato, obrigada a ter fetch e parse
 class RSSAdapter(BaseAdapter):
     """Adapter que coleta e traduz noticias de um feed"""
@@ -33,7 +34,7 @@ class RSSAdapter(BaseAdapter):
             published = datetime.fromtimestamp(timestamp, tz=dt_timezone.utc)
             posts.append({
                 "external_id":entry.id,
-                "text_content":f"{entry.title}. {entry.subtitle}",
+                "text_content":f"{entry.title}. {getattr(entry, "subtitle", '')}", #pega o subtitle, se nao existir, usa '' para nao estourar
                 "published_at":published,
             })
-            return posts
+        return posts
