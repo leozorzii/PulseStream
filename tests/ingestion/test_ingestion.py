@@ -3,6 +3,8 @@ import pytest
 from types import SimpleNamespace
 from datetime import datetime, timezone as dt_timezone
 from apps.ingestion.adapters.rss import RSSAdapter
+from apps.ingestion.exceptions import FeedFetchError
+from urllib.error import URLError
 from unittest.mock import patch, MagicMock
 
 def test_parse_entries_for_rawpost():
@@ -96,3 +98,22 @@ def test_parse_lida_com_subtitle_ausente():
     # Não deve quebrar; deve processar usando só o título
     assert len(resultado) == 1
     assert resultado[0]["text_content"] == "Notícia sem resumo. "
+    
+    
+import pytest
+
+def test_fetch_levanta_erro_quando_feed_inacessivel():
+    # monta um feed falso que simula falha de acesso
+    feed_falho = MagicMock()
+    feed_falho.bozo = True
+    feed_falho.entries = []
+    feed_falho.bozo_exception = URLError("simulando TLS/rede quebrada")
+
+    with patch("apps.ingestion.adapters.rss.feedparser.parse") as mock_parse:
+        mock_parse.return_value = feed_falho
+
+        adapter = RSSAdapter("http://url-qualquer.com/feed")
+
+        # espera que fetch() levante a exceção
+        with pytest.raises(FeedFetchError):
+            adapter.fetch()   
