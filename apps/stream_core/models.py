@@ -8,6 +8,7 @@ class ContentSource(models.Model):
     name = models.CharField(max_length=100)
     plataform = models.CharField(max_length=20, choices=PLATAFORMAS)
     external_id = models.CharField(max_length=255, unique=True)
+    feed_url = models.URLField(max_length=500, null=True, blank=True) #url do feed RSS, nem toda fonte tem
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True) #define automaticamente o valor de um campo de data ou hora para o momento exato em que um novo objeto é criado pela primeira vez
     
