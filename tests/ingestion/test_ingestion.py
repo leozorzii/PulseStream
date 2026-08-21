@@ -116,4 +116,19 @@ def test_fetch_levanta_erro_quando_feed_inacessivel():
 
         # espera que fetch() levante a exceção
         with pytest.raises(FeedFetchError):
-            adapter.fetch()   
+            adapter.fetch()  
+            
+            
+def test_fetch_nao_levanta_erro_quando_feed_acessivel_porem_XML_ruim():
+    # monta um feed falso que simula falha de acesso
+    feed_falho = MagicMock()
+    feed_falho.bozo = True
+    feed_falho.entries = ["entry1", "entry2"]
+
+    with patch("apps.ingestion.adapters.rss.feedparser.parse") as mock_parse:
+        mock_parse.return_value = feed_falho
+
+        adapter = RSSAdapter("http://url-qualquer.com/feed")
+        resultado = adapter.fetch()    
+           
+    assert resultado == ["entry1", "entry2"]
