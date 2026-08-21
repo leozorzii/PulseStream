@@ -6,6 +6,7 @@ from apps.ingestion.adapters.rss import RSSAdapter
 from apps.stream_core.selectors import get_active_sources, get_unprocessed_posts, get_sentiment_summary_by_source
 from apps.ingestion.services import run_ingestion
 from rest_framework import status
+from apps.ingestion.exceptions import FeedFetchError
 class ActiveSourceListView(APIView):
     """Endpoint que lista as fontes de conteudo ativas (GET)."""
     #responde a requisicoes GET
@@ -64,12 +65,19 @@ class TriggerIngestionView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # dispara a coleta real: monta o adapter e entrega pro service orquestrar
+        # tenta coletar, se falhar responde com 502 e para aqui
+        # se chegou ate embaixo, eh por que coletou, 200 responde com contagem
         adapter = RSSAdapter(source.feed_url)
-        resultado = run_ingestion(source, adapter)
-
+        try:
+            resultado = run_ingestion(source, adapter)
+        except FeedFetchError as e:
+           return Response(
+               {"erro": f"nao foi possivel acessar feed da fonte: {e}"},
+               status=status.HTTP_502_BAD_GATEWAY
+           ) 
+            
         return Response(
-            {
+                {
                 "msg": f"coleta disparada para a fonte {source_id}",
                 "posts_coletados": len(resultado),
             },
