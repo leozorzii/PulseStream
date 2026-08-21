@@ -3,6 +3,7 @@ from datetime import datetime, timezone as dt_timezone
 
 import feedparser
 from apps.ingestion.adapters.base import BaseAdapter
+from apps.ingestion.exceptions import FeedFetchError
 
 
 #herda do contrato, obrigada a ter fetch e parse
@@ -16,6 +17,10 @@ class RSSAdapter(BaseAdapter):
     def fetch(self):
         """Busca o feed RSS da URL e retorna os entries crus(sem traducao)"""
         feed = feedparser.parse(self.url)
+        #verificao usando excecao
+        if feed.bozo and not feed.entries:
+            raise FeedFetchError(f"Falha ao acessar o feed {self.url}:  {feed.bozo_exception}")
+        
         return feed.entries
     
     def parse(self,entries):

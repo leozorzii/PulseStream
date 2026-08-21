@@ -3,6 +3,7 @@ from unittest.mock import patch
 from rest_framework.test import APIClient
 
 from apps.stream_core.models import ContentSource
+from apps.ingestion.exceptions import FeedFetchError
 
 
 @pytest.mark.django_db
@@ -76,3 +77,24 @@ def test_trigger_success():
     assert response.data["posts_coletados"] == 2
     #a view tem que ter chamado o service de fato
     mock_run.assert_called_once()
+    
+@pytest.mark.django_db
+def test_trigger_retorna_502_quando_feed_inacessivel():
+    # fonte valida, com feed_url preenchida
+    source = ContentSource.objects.create(
+        name="G1 Teste",
+        plataform="NEWS",
+        external_id="g1-teste-502",
+        feed_url="https://exemplo.com/feed",
+    )
+
+    client = APIClient()
+
+    # mocka run_ingestion pra LEVANTAR a exceção (simula feed inacessível)
+    with patch("apps.api.views.run_ingestion", side_effect=FeedFetchError("SSL falhou")):
+        response = client.post(
+            "/api/ingestion/trigger/",
+            {"source_id": source.id},
+            format="json",
+        )
+    assert response.status_code == 502
