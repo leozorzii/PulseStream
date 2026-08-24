@@ -45,14 +45,21 @@ def extrair_palavras_chave(texto):
     return response
 
 def classificar_sentimento(texto):
-    
-    """Extrai a classificação do sentimento.
-    
+
+    """Classifica o sentimento do texto e mede a intensidade dele.
+
+        Devolve o rotulo ja no codigo canonico do banco ("POS"/"NEU"/"NEG"),
+        e nao em palavras por extenso, para que o resultado possa ir direto
+        para SentimentAnalysis.label sem nenhuma traducao no meio do caminho.
+        Traduzir em outra camada seria mais um lugar para o valor divergir
+        das choices do model.
+
         Args:
             texto (str): Texto a ser analisado.
-    
+
         Returns:
-            texto(str): classificação do sentimento em "positivo", "negativo" ou "neutro"
+            tuple[str, float]: (label, polarity_score), onde label e "POS",
+                "NEU" ou "NEG" e polarity_score vai de -1.0 a +1.0
         """
     
     texto_limpo = limpar_texto(texto)
@@ -82,9 +89,27 @@ def classificar_sentimento(texto):
                 negativas += 1
             negar = False
             
-    if positivas > negativas:
-        return "positivo"
-    elif negativas > positivas:
-        return "negativo"
+    #total de palavras com carga emocional; texto sem nenhuma delas da 0
+    total = positivas + negativas
+
+    #guarda contra divisao por zero: texto neutro nao tem denominador para
+    #normalizar, entao a polaridade e exatamente 0.0 (nem positiva nem negativa)
+    if total == 0:
+        polarity_score = 0.0
     else:
-        return "neutro"
+        #normaliza entre -1.0 e +1.0 dividindo pelo total de palavras com carga.
+        #o denominador e o total, e nao a contagem de palavras do texto, para que
+        #a intensidade nao seja diluida pelo tamanho do texto: "otimo" e
+        #"otimo, mas o resto do texto e enorme" tem a mesma polaridade
+        polarity_score = (positivas - negativas) / total
+
+    #o rotulo sai da comparacao das contagens, nao do sinal do score, para
+    #preservar exatamente o criterio de empate que ja existia (empate = neutro)
+    if positivas > negativas:
+        label = "POS"
+    elif negativas > positivas:
+        label = "NEG"
+    else:
+        label = "NEU"
+
+    return label, polarity_score
