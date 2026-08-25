@@ -21,7 +21,8 @@ static_root/
 *.log
 
 # Celery
-celerybeat-schedule
+# o glob cobre os sidecars do SQLite (-shm, -wal) que o Beat cria ao rodar
+celerybeat-schedule*
 celerybeat.pid
 
 # Jupyter
