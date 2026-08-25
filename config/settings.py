@@ -72,3 +72,20 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "America/Sao_Paulo"
+
+#CELERY BEAT - agendamento periodico
+#o endpoint de trigger ja enfileira a analise depois de cada coleta bem sucedida.
+#este agendamento e a rede de seguranca para o que escapa daquele caminho: posts
+#ingeridos por outra rota, lote interrompido com o worker fora do ar, ou backlog
+#anterior a fiacao. sem ele, esses posts ficam pendentes ate alguem chamar o
+#endpoint de novo.
+CELERY_BEAT_SCHEDULE = {
+    "drain-pending-sentiments": {
+        "task": "apps.ingestion.tasks.processar_sentimentos",
+        #5 minutos: curto o bastante para o backlog nao acumular, longo o
+        #bastante para nao martelar o banco. quando nao ha pendente a task e
+        #praticamente um no-op (uma consulta que volta vazia), entao o custo
+        #de rodar a toa e baixo
+        "schedule": 300.0,
+    },
+}
