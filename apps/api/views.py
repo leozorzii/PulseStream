@@ -7,6 +7,7 @@ from apps.stream_core.selectors import get_active_sources, get_unprocessed_posts
 from apps.ingestion.services import run_ingestion
 from rest_framework import status
 from apps.ingestion.exceptions import FeedFetchError
+from apps.ingestion.tasks import processar_sentimentos
 class ActiveSourceListView(APIView):
     """Endpoint que lista as fontes de conteudo ativas (GET)."""
     #responde a requisicoes GET
@@ -76,6 +77,16 @@ class TriggerIngestionView(APIView):
                status=status.HTTP_502_BAD_GATEWAY
            ) 
             
+        # coleta deu certo: enfileira a analise de sentimento e responde na hora.
+        # o dispatch mora AQUI, e nao dentro do run_ingestion, porque a view e a
+        # fronteira de orquestracao: o service continua sem saber que Celery existe
+        # e segue testavel/reusavel fora de um contexto com broker.
+        # .delay() enfileira em vez de executar: analisar sincrono deixaria a
+        # resposta HTTP presa esperando o NLP de todos os posts coletados.
+        # sem argumentos porque a task drena os pendentes que encontrar no banco
+        # na hora em que rodar (ver docstring de processar_sentimentos).
+        processar_sentimentos.delay()
+
         return Response(
                 {
                 "msg": f"coleta disparada para a fonte {source_id}",

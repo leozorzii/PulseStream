@@ -105,22 +105,24 @@ PulseStream is under **active development**. This section is kept honest — it 
 - [x] Data models (`ContentSource`, `RawPost`, `SentimentAnalysis`)
 - [x] Initial database migrations
 
-**Phase 1 — Domain & Persistence** (`stream_core`) ⬜
+**Phase 1 — Domain & Persistence** (`stream_core`) ✅
 
 - [x] Selectors (`get_active_sources`, `get_unprocessed_posts`, ...)
 - [x] Services (`create_content_source`, `bulk_create_raw_posts`, ...)
 
-**Phase 2 — Ingestion / ETL** (`ingestion`) ⬜
+**Phase 2 — Ingestion / ETL** (`ingestion`) 🚧 _in progress_
 
-- [ ] Base adapter interface + a real connector
-- [ ] Ingestion service
-- [ ] Celery scheduled pipeline
+- [x] Base adapter interface (`BaseAdapter`) + RSS connector (`RSSAdapter`) · _fully tested_
+- [x] Ingestion service (`run_ingestion`) + `POST /api/ingestion/trigger/` endpoint
+- [x] Celery task for background sentiment processing (`processar_sentimentos`)
+- [x] Dispatch the task after a successful ingestion (`.delay()` from the trigger endpoint)
+- [ ] Periodic draining of pending posts (Celery Beat schedule)
 
 **Phase 3 — Analytics Engine** (`analytics`) 🚧 _in progress_
 
 - [x] `limpar_texto` — text cleaning (HTML strip + normalization) · _fully tested_
 - [x] `extrair_palavras_chave` — keyword extraction (frequency + stopwords) · _fully tested_
-- [ ] `classificar_sentimento` — sentiment classification
+- [x] `classificar_sentimento` — sentiment classification, returns `(label, polarity_score)` · _fully tested_
 - [ ] Topic modeling
 - [ ] Statistical metrics
 
@@ -134,16 +136,15 @@ PulseStream is under **active development**. This section is kept honest — it 
 
 **Phase 6 — DevOps & Quality** 🚧 _in progress_
 
-- [x] Test suite for the analytics layer (pytest)
+- [x] Test suite (pytest) — analytics, `stream_core`, ingestion & API layers
 - [ ] Dockerization (`Dockerfile` + `docker-compose.yml`)
-- [ ] Tests for services & API layers
 - [ ] CI/CD with GitHub Actions
 
 ---
 
 ## Getting Started
 
-> ⚠️ The project is mid-development. Today you can run the **analytics module and its test suite**. Full app bootstrapping (DB, ingestion, API) will land as the phases above are completed.
+> ⚠️ The project is mid-development. Today you can run the **API, the RSS ingestion pipeline and the full test suite**. Background processing requires a running Redis broker; MCP server and Docker are still pending.
 
 ```bash
 # 1. Clone
