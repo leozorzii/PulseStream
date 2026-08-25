@@ -115,7 +115,8 @@ PulseStream is under **active development**. This section is kept honest — it 
 - [x] Base adapter interface (`BaseAdapter`) + RSS connector (`RSSAdapter`) · _fully tested_
 - [x] Ingestion service (`run_ingestion`) + `POST /api/ingestion/trigger/` endpoint
 - [x] Celery task for background sentiment processing (`processar_sentimentos`)
-- [ ] Trigger/schedule the task after ingestion completes
+- [x] Dispatch the task after a successful ingestion (`.delay()` from the trigger endpoint)
+- [ ] Periodic draining of pending posts (Celery Beat schedule)
 
 **Phase 3 — Analytics Engine** (`analytics`) 🚧 _in progress_
 
