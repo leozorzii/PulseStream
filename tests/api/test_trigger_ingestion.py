@@ -62,8 +62,14 @@ def test_trigger_success():
     )
 
     #mocka o run_ingestion no namespace da VIEW, que e onde ele foi importado.
-    #assim o teste nao depende de internet nem do feed real do G1
-    with patch("apps.api.views.run_ingestion") as mock_run:
+    #assim o teste nao depende de internet nem do feed real do G1.
+    #a task tambem entra no mock: a view chama .delay() no caminho de sucesso,
+    #e sem isso o teste tenta falar com o Redis de verdade — passando so em
+    #maquina com broker no ar e travando ~2min onde nao tem
+    with (
+        patch("apps.api.views.run_ingestion") as mock_run,
+        patch("apps.api.views.processar_sentimentos"),
+    ):
         mock_run.return_value = ["post_falso_1", "post_falso_2"]
 
         client = APIClient()
