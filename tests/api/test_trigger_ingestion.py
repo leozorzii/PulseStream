@@ -98,3 +98,61 @@ def test_trigger_retorna_502_quando_feed_inacessivel():
             format="json",
         )
     assert response.status_code == 502
+
+
+@pytest.mark.django_db
+def test_trigger_dispatches_sentiment_task_after_ingestion():
+    #fonte completa, com feed_url configurada
+    fonte = ContentSource.objects.create(
+        name="G1 Task",
+        plataform="NEWS",
+        external_id="g1-dispara-task",
+        feed_url="https://exemplo.com/feed",
+    )
+
+    #os dois mocks vivem no namespace da VIEW, que e onde os nomes foram
+    #importados. run_ingestion mockado mantem o teste offline; a task mockada
+    #evita depender de broker (Redis) rodando durante a suite
+    with patch("apps.api.views.run_ingestion") as mock_run, \
+         patch("apps.api.views.processar_sentimentos") as mock_task:
+        mock_run.return_value = ["post_falso_1", "post_falso_2"]
+
+        client = APIClient()
+        response = client.post(
+            "/api/ingestion/trigger/",
+            {"source_id": fonte.id},
+            format="json",
+        )
+
+    assert response.status_code == 200
+    #a analise tem que ser ENFILEIRADA (.delay), nao executada na request:
+    #rodar sincrono aqui deixaria a resposta HTTP lenta
+    mock_task.delay.assert_called_once_with()
+
+
+@pytest.mark.django_db
+def test_trigger_nao_dispara_task_quando_ingestao_falha():
+    """Teste guardiao: se a coleta falhou, nao ha o que analisar.
+
+    Enfileirar a task mesmo assim gastaria worker a toa e, pior, mascararia
+    a falha: a fila pareceria saudavel enquanto nenhum post novo entrou.
+    """
+    fonte = ContentSource.objects.create(
+        name="G1 Falha",
+        plataform="NEWS",
+        external_id="g1-falha-nao-dispara",
+        feed_url="https://exemplo.com/feed",
+    )
+
+    with patch("apps.api.views.run_ingestion", side_effect=FeedFetchError("SSL falhou")), \
+         patch("apps.api.views.processar_sentimentos") as mock_task:
+        client = APIClient()
+        response = client.post(
+            "/api/ingestion/trigger/",
+            {"source_id": fonte.id},
+            format="json",
+        )
+
+    assert response.status_code == 502
+    #o caminho do 502 retorna antes, entao a task nunca deve ser enfileirada
+    mock_task.delay.assert_not_called()
