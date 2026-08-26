@@ -1,0 +1,28 @@
+# Ambiente virtual
+.venv/
+venv/
+
+# Segredos
+.env
+
+# Cache do Python 
+__pycache__/
+*.pyc
+
+# Git
+.git/
+.gitignore
+
+# Banco local de dev
+db.sqlite3
+
+# Config de IDE e sistema 
+.vscode/
+.idea/
+
+# O próprio Docker
+Dockerfile
+.dockerignore
+
+# Testes e CI
+.github/

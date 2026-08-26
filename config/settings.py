@@ -1,15 +1,16 @@
 import sys
 from pathlib import Path
+from decouple import config
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR / "apps"))
 
 
-SECRET_KEY = 'django-insecure-1^nej1%%roup9b2f_+1&go55(!exxx5edte9tgm6_$hh3+rvo8'
+SECRET_KEY = config("SECRET_KEY")
 WSGI_APPLICATION = 'config.wsgi.application' 
 ROOT_URLCONF = 'config.urls'
-DEBUG = True
+DEBUG = config("DEBUG", default=False, cast=bool)
 
 
 STATIC_URL = 'static/'
@@ -66,8 +67,8 @@ USE_I18N = True
 USE_TZ = True
 
 #CELERY
-CELERY_BROKER_URL = "redis://localhost:6379/0"
-CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default="redis://localhost:6379/0")
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
