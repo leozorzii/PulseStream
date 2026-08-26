@@ -137,7 +137,7 @@ PulseStream is under **active development**. This section is kept honest — it 
 **Phase 6 — DevOps & Quality** 🚧 _in progress_
 
 - [x] Test suite (pytest) — analytics, `stream_core`, ingestion & API layers
-- [ ] Dockerization (`Dockerfile` + `docker-compose.yml`)
+- [x] Dockerization (`Dockerfile` + `docker-compose.yml`)
 - [ ] CI/CD with GitHub Actions
 
 ---
