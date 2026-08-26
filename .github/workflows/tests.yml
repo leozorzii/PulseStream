@@ -1,14 +1,10 @@
 name: tests
 
-# roda em PR (pega regressao antes do merge) e em push na main
-# (pega o que entrou por merge de PR ou commit direto)
 on:
   push:
     branches: [main]
   pull_request:
 
-# um PR com varios pushes seguidos cancela as execucoes antigas em vez de
-# enfileirar: o resultado que importa e o do ultimo commit
 concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
@@ -16,6 +12,12 @@ concurrency:
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    # variaveis de ambiente para todos os steps deste job: o Django precisa
+    # do SECRET_KEY para bootar (makemigrations e pytest). valor dummy — o CI
+    # e efemero e nao assina nada real, entao nao precisa ser secreto
+    env:
+      SECRET_KEY: "ci-dummy-key-not-secret-just-for-tests"
+      DEBUG: "False"
 
     steps:
       - name: Checkout
@@ -24,8 +26,6 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          # mesma versao usada em desenvolvimento, para o CI nao passar
-          # (ou quebrar) por diferenca de runtime
           python-version: "3.14"
           cache: pip
           cache-dependency-path: requirements.txt
@@ -34,12 +34,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run migrations check
-        # falha se alguem alterou um model e esqueceu de gerar a migration:
-        # o erro apareceria so em deploy, nao nos testes
         run: python manage.py makemigrations --check --dry-run
 
       - name: Run test suite
-        # sem service de Redis de proposito: a suite mocka o Celery e roda
-        # offline. se um teste passar a exigir broker, ele falha aqui — que
-        # e exatamente o sinal desejado
         run: pytest -v
