@@ -126,19 +126,20 @@ PulseStream is under **active development**. This section is kept honest — it 
 - [ ] Topic modeling
 - [ ] Statistical metrics
 
-**Phase 4 — REST API** (`api`) ⬜
+**Phase 4 — REST API** (`api`) ✅
 
 - [x] Serializers, views & endpoints
 
-**Phase 5 — MCP Server** (`mcp_server`) ⬜
+**Phase 5 — MCP Server** (`mcp_server`) ✅
 
-- [ ] Server init + exposed analytical tools
+- [x] Server init + analytical tools (`listar_fontes`, `resumo_sentimento_fonte`)
 
 **Phase 6 — DevOps & Quality** 🚧 _in progress_
 
 - [x] Test suite (pytest) — analytics, `stream_core`, ingestion & API layers
 - [x] Dockerization (`Dockerfile` + `docker-compose.yml`)
-- [ ] CI/CD with GitHub Actions
+- [x] CI: test suite on every pull request (GitHub Actions)
+- [ ] CD: automated deploy
 
 ---
 
