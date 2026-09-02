@@ -26,11 +26,13 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # Third-party
     'rest_framework',
+    'corsheaders',
     'apps.stream_core',
     'apps.ingestion',
 ]
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',   # antes do CommonMiddleware (preflight)
     'django.contrib.sessions.middleware.SessionMiddleware',       # Gerencia sessões de usuário
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -65,6 +67,20 @@ LANGUAGE_CODE = 'pt-br'
 TIME_ZONE = 'America/Sao_Paulo'  
 USE_I18N = True
 USE_TZ = True
+
+#CORS
+#o frontend (Vite) roda em outra origem que o Django, entao o navegador exige
+#os headers de CORS. a lista vem do ambiente, igual SECRET_KEY e DEBUG, para
+#que producao aponte para o dominio real sem editar codigo.
+#formato da env var: origens separadas por virgula, sem barra no final.
+CORS_ALLOWED_ORIGINS = [
+    origem.strip()
+    for origem in config(
+        "CORS_ALLOWED_ORIGINS",
+        default="http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if origem.strip()
+]
 
 #CELERY
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://localhost:6379/0")
