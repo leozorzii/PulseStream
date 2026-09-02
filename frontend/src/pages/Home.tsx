@@ -33,7 +33,7 @@ export default function Home() {
       {/* scroll-mt dá respiro no destino da âncora #analises. */}
       <section id="analises" className="container mx-auto scroll-mt-8 px-4 pb-24">
         {/* h2, não h1: o h1 da página é o "PulseStream" do herói. */}
-        <h2 className="text-2xl font-semibold tracking-tight">Análises</h2>
+        <h2 className="font-display text-3xl font-semibold uppercase tracking-wide">Análises</h2>
         {/* foreground/70 e não muted-foreground: texto direto sobre o padrão. */}
         <p className="mt-1 text-sm text-foreground/70">
           Dados de exemplo — ainda não ligado à API.

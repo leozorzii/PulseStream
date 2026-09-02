@@ -1,10 +1,22 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="pt-BR" class="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PulseStream</title>
+
+    <!-- Fontes. A URL foi aparada para as DUAS famílias em uso: o embed do
+         Google Fonts trazia cinco (Bitcount, Fraunces, Roboto Slab também),
+         e cada família não usada é download e parse a mais por nada.
+         display=swap evita FOIT: o texto aparece na fonte de fallback e troca
+         quando a web font chega, em vez de ficar invisível esperando. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Oswald:wght@200..700&family=Piazzolla:ital,opsz,wght@0,8..30,100..900;1,8..30,100..900&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <div id="root"></div>

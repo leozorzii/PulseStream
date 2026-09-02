@@ -25,7 +25,7 @@ export function Hero({
     // Sem bg-*: o padrão de cruzes precisa aparecer atrás daqui.
     <section className="flex min-h-dvh w-full items-center justify-center px-4 py-16">
       <div className="mx-auto max-w-4xl text-center">
-        <h1 className="mb-6 text-5xl font-bold tracking-tighter sm:text-7xl md:text-8xl">
+        <h1 className="mb-6 font-display text-6xl font-bold uppercase tracking-tight sm:text-8xl md:text-9xl">
           {words.map((word, wordIndex) => (
             <span key={wordIndex} className="mr-4 inline-block last:mr-0">
               {word.split("").map((letter, letterIndex) => (

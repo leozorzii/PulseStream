@@ -8,7 +8,7 @@ export default function NotFound() {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-4 px-4 text-center">
       <p className="text-sm font-medium text-primary">404</p>
-      <h1 className="text-3xl font-semibold tracking-tight">Página não encontrada</h1>
+      <h1 className="font-display text-4xl font-semibold uppercase tracking-wide">Página não encontrada</h1>
       <p className="text-foreground/70">
         O endereço acessado não existe neste app.
       </p>

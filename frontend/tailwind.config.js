@@ -38,6 +38,25 @@ export default {
       screens: { "2xl": "1400px" },
     },
     extend: {
+      /*
+       * TIPOGRAFIA
+       * ----------
+       * `sans` e `display` sao os nomes das CHAVES do Tailwind, nao uma
+       * afirmacao sobre a classificacao da fonte — a Piazzolla e serifada.
+       * `sans` e a familia que o preflight aplica no <html>, entao sobrescrever
+       * essa chave e o que faz a Piazzolla virar o padrao de tudo sem precisar
+       * marcar componente por componente.
+       *
+       * Piazzolla tem eixo de tamanho optico (opsz 8..30): o desenho se ajusta
+       * sozinho conforme o corpo, que e justamente o que segura a legibilidade
+       * nos percentuais pequenos dos cards.
+       *
+       * Oswald e condensada e vai so nos titulos grandes, via font-display.
+       */
+      fontFamily: {
+        sans: ["Piazzolla", "ui-serif", "Georgia", "serif"],
+        display: ["Oswald", "ui-sans-serif", "system-ui", "sans-serif"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
