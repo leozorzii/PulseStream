@@ -57,7 +57,8 @@ flowchart LR
         MCP[" MCP Server<br/>(mcp_server)<br/>natural-language access"]
     end
 
-    Consumer[" Dashboards /<br/>Integrations"]
+    UI[" Web UI<br/>(frontend)<br/>React + Vite"]
+    Consumer[" Other Dashboards /<br/>Integrations"]
     LLM[" AI Assistants<br/>(LLMs)"]
 
     X & YT & RSS --> ING
@@ -67,6 +68,7 @@ flowchart LR
     ANALYTICS --> CORE
     CORE --> API
     CORE --> MCP
+    API --> UI
     API --> Consumer
     MCP --> LLM
 ```
@@ -78,13 +80,15 @@ flowchart LR
 | `apps/analytics`   | Pure-Python NLP: cleaning, keywords, sentiment, metrics                      | The analyst               |
 | `apps/api`         | Django REST Framework endpoints for external consumers                       | The service counter       |
 | `mcp_server`       | Model Context Protocol server so LLMs can query the data in natural language | The AI translator         |
+| `frontend`         | React + Vite dashboard consuming the REST API                                | The shop window           |
 
 ---
 
 ## Tech Stack
 
 - **Backend:** Python 3.14, Django, Django REST Framework
-- **Database:** PostgreSQL
+- **Frontend:** React 19 + Vite, Tailwind CSS
+- **Database:** SQLite today; PostgreSQL is the deployment target
 - **Async / Scheduling:** Celery + Redis
 - **NLP / Data Science:** pure Python (frequency-based), with spaCy / Hugging Face planned for advanced features
 - **Testing:** pytest (Test-Driven Development)
@@ -140,6 +144,12 @@ PulseStream is under **active development**. This section is kept honest — it 
 - [x] Dockerization (`Dockerfile` + `docker-compose.yml`)
 - [x] CI: test suite on every pull request (GitHub Actions)
 - [ ] CD: automated deploy
+
+**Phase 7 — Web UI** (`frontend`) 🚧 _in progress_
+
+- [x] React + Vite scaffold, Tailwind with semantic colour tokens
+- [x] Configured API client + CORS on the backend
+- [ ] Dashboard and source-detail screens
 
 ---
 
@@ -199,6 +209,18 @@ python -m pytest
 ```
 
 The test suite is fully mocked and offline — it needs neither Redis nor network access. Running the app itself, however, needs Redis plus a Celery worker and beat process; see [docs/guia.md](docs/guia.md) for the four-terminal setup.
+
+### Running the frontend
+
+The web UI is a separate React app in [`frontend/`](frontend/), not served by Django.
+
+```bash
+cd frontend
+npm install
+npm run dev          # http://localhost:5173
+```
+
+It reads the API base URL from `VITE_API_BASE_URL`, defaulting to `http://localhost:8000`. The backend already allows the Vite dev server origin through CORS, so no extra setup is needed for local development — just keep the backend running in another terminal.
 
 ---
 

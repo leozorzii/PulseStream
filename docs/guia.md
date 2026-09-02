@@ -213,6 +213,68 @@ O `list` é importante: sem ele, o QuerySet é preguiçoso e só bateria no banc
 
 ---
 
+## ⚛️ Frontend (React + Vite)
+
+Vive em `frontend/`, na raiz do repo — monorepo, ao lado de `apps/` e `mcp_server/`. **Não é servido pelo Django**: são dois processos separados, em portas diferentes.
+
+```bash
+cd frontend
+npm install
+npm run dev       # http://localhost:5173
+npm run build     # gera dist/ (só pra conferir que compila)
+```
+
+Precisa do backend rodando em paralelo, em outro terminal.
+
+### Estrutura
+
+| Pasta | O que entra |
+|---|---|
+| `components/` | peças reutilizáveis. **Não busca dado** — recebe por props |
+| `pages/` | uma tela por arquivo. É quem busca o dado e monta os componentes |
+| `hooks/` | hooks customizados, sobretudo wrappers de fetch (`useSources()`) |
+| `services/` | camada HTTP. `api.js` é a instância axios configurada |
+| `lib/` | helpers puros. Nada aqui importa React |
+
+Cada pasta tem um README com a convenção dela.
+
+### Cores: usa os tokens, não as cores cruas
+
+Nada de `bg-gray-100` ou `text-red-600`. Os tokens semânticos:
+
+```
+bg-background          bg-surface           border-border
+text-text-primary      text-text-muted      bg-accent
+text-sentiment-positive   -neutral   -negative
+```
+
+Os três de sentimento mapeiam direto nos labels `POS`/`NEU`/`NEG` que a API devolve.
+
+Definidos em `frontend/tailwind.config.js`, com os valores em `frontend/src/index.css` — uma vez pra tema claro, outra dentro de `.dark`. Trocar de tema é trocar variável, não refatorar componente.
+
+> 💡 Os valores são canais RGB (`21 128 61`), não hex. É isso que faz `bg-sentiment-positive/10` funcionar. Se trocar por hex, todo modificador de opacidade quebra em silêncio.
+
+### Falar com a API
+
+```js
+import api from "@/services/api"   // ou caminho relativo
+```
+
+A URL base vem de `VITE_API_BASE_URL`, com fallback pra `http://localhost:8000`. É lida em **build time** — mudou o `.env.local`, reinicia o `npm run dev`.
+
+As chamadas em si ainda não existem: entram em módulos irmãos de `api.js`, agrupados por domínio (`sources.js`, `analytics.js`).
+
+### CORS
+
+O navegador bloqueia chamada entre origens diferentes. O backend já libera `localhost:5173` e `127.0.0.1:5173` via `django-cors-headers`.
+
+Se aparecer erro de CORS no console:
+1. A origem do navegador está na lista? Ver `CORS_ALLOWED_ORIGINS` no `settings.py`.
+2. Backend reiniciado depois de mudar a lista?
+3. `127.0.0.1` e `localhost` são **origens diferentes** pro navegador — ambas precisam estar liberadas.
+
+---
+
 ## 🧪 Testes e CI
 
 ```bash
@@ -434,6 +496,7 @@ pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org <pacot
 - **Fase 4 — API:** 4 endpoints (sources, posts/unprocessed, analytics/summary, ingestion/trigger)
 - **Fase 5 — MCP:** servidor com 2 tools
 - **Fase 6 (parcial):** Docker + Compose, CI de testes em todo PR
+- **Fase 7 (iniciada):** frontend React + Vite montado (estrutura, tokens de cor, cliente axios, CORS liberado)
 
 **Suíte:** 43 passed, 1 xfailed (o xfail é o sarcasmo, limitação conhecida e documentada)
 
@@ -442,6 +505,7 @@ pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org <pacot
 - Issue #15 — expandir listas de palavras e stopwords (melhorar precisão)
 - Issue #16 — spike: análise de sentimento com LLM
 - Fase 6 — CD (deploy automatizado); o CI já roda
+- Fase 7 — as telas: Dashboard e SourceDetail (a estrutura já está pronta em frontend/src/pages)
 
 **Dívida técnica anotada:**
 - MCP só funciona local (stdio). Remoto/HTTP é passo futuro.
