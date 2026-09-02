@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Palette. Values are space-separated RGB channels so Tailwind's
+ * <alpha-value> placeholder works (see tailwind.config.js).
+ * Change a colour here and it changes everywhere.
+ */
+@layer base {
+  :root {
+    --color-background: 249 250 251;
+    --color-surface: 255 255 255;
+    --color-border: 229 231 235;
+    --color-text-primary: 17 24 39;
+    --color-text-muted: 107 114 128;
+    --color-accent: 37 99 235;
+
+    --color-sentiment-positive: 21 128 61;
+    --color-sentiment-neutral: 71 85 105;
+    --color-sentiment-negative: 185 28 28;
+  }
+
+  /* Dark theme: add class="dark" to <html>. Only the values change —
+     no component needs to know which theme is active. */
+  .dark {
+    --color-background: 9 9 11;
+    --color-surface: 24 24 27;
+    --color-border: 39 39 42;
+    --color-text-primary: 244 244 245;
+    --color-text-muted: 161 161 170;
+    --color-accent: 96 165 250;
+
+    --color-sentiment-positive: 74 222 128;
+    --color-sentiment-neutral: 148 163 184;
+    --color-sentiment-negative: 248 113 113;
+  }
+
+  body {
+    @apply bg-background text-text-primary antialiased;
+  }
+}
