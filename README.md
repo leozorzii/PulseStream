@@ -54,7 +54,7 @@ flowchart LR
         DB[("PostgreSQL")]
         ANALYTICS[" Analytics Engine<br/>(apps/analytics)<br/>pure Python, no ORM"]
         API[" REST API<br/>(apps/api)<br/>DRF endpoints"]
-        MCP[" MCP Server<br/>(apps/mcp_server)<br/>natural-language access"]
+        MCP[" MCP Server<br/>(mcp_server)<br/>natural-language access"]
     end
 
     Consumer[" Dashboards /<br/>Integrations"]
@@ -77,7 +77,7 @@ flowchart LR
 | `apps/stream_core` | Domain rules: reads (`selectors`) and writes (`services`) to the DB          | The warehouse             |
 | `apps/analytics`   | Pure-Python NLP: cleaning, keywords, sentiment, metrics                      | The analyst               |
 | `apps/api`         | Django REST Framework endpoints for external consumers                       | The service counter       |
-| `apps/mcp_server`  | Model Context Protocol server so LLMs can query the data in natural language | The AI translator         |
+| `mcp_server`       | Model Context Protocol server so LLMs can query the data in natural language | The AI translator         |
 
 ---
 
