@@ -77,7 +77,20 @@
     @apply border-border;
   }
 
+  /* Este bg-background é o ÚNICO que pode existir. Ele propaga para o canvas,
+     que pinta atrás de tudo — inclusive atrás do -z-10 do padrão de cruzes.
+     Um bg-background em qualquer elemento em fluxo ficaria NA FRENTE do
+     padrão e o apagaria, sem erro nenhum. */
   body {
     @apply bg-background text-foreground antialiased;
+  }
+
+  /* Rolagem suave só para a âncora #analises do herói. Fica atrás da media
+     query porque scroll animado é gatilho vestibular, e scroll-behavior no
+     html afeta TODA rolagem programática da página. */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
   }
 }

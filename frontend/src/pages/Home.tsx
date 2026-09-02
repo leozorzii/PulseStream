@@ -1,3 +1,4 @@
+import { Hero } from "@/components/Hero"
 import { SentimentAnalysisCard } from "@/components/SentimentAnalysisCard"
 import type { SentimentSlice } from "@/lib/sentiment"
 
@@ -24,21 +25,26 @@ const MOCK_NEGATIVO: SentimentSlice[] = [
 /* Fonte coletada mas ainda não analisada: a API devolve {} nesse caso. */
 const MOCK_VAZIO: SentimentSlice[] = []
 
-export default function Dashboard() {
+export default function Home() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+    <>
+      <Hero />
+
+      {/* scroll-mt dá respiro no destino da âncora #analises. */}
+      <section id="analises" className="container mx-auto scroll-mt-8 px-4 pb-24">
+        {/* h2, não h1: o h1 da página é o "PulseStream" do herói. */}
+        <h2 className="text-2xl font-semibold tracking-tight">Análises</h2>
+        {/* foreground/70 e não muted-foreground: texto direto sobre o padrão. */}
+        <p className="mt-1 text-sm text-foreground/70">
           Dados de exemplo — ainda não ligado à API.
         </p>
-      </div>
 
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-        <SentimentAnalysisCard title="G1 Tecnologia" slices={MOCK_POSITIVO} />
-        <SentimentAnalysisCard title="Canal de Reclamações" slices={MOCK_NEGATIVO} />
-        <SentimentAnalysisCard title="Fonte recém-criada" slices={MOCK_VAZIO} />
-      </div>
-    </div>
+        <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+          <SentimentAnalysisCard title="G1 Tecnologia" slices={MOCK_POSITIVO} />
+          <SentimentAnalysisCard title="Canal de Reclamações" slices={MOCK_NEGATIVO} />
+          <SentimentAnalysisCard title="Fonte recém-criada" slices={MOCK_VAZIO} />
+        </div>
+      </section>
+    </>
   )
 }

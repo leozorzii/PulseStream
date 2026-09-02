@@ -1,24 +1,21 @@
 import { Route, Routes } from "react-router-dom"
 
-import AppLayout from "@/components/layout/AppLayout"
-import Dashboard from "@/pages/Dashboard"
-import Landing from "@/pages/Landing"
+import RootLayout from "@/components/layout/RootLayout"
+import Home from "@/pages/Home"
 import NotFound from "@/pages/NotFound"
 import SourceDetail from "@/pages/SourceDetail"
 
 export default function App() {
   return (
     <Routes>
-      {/* A landing fica fora do AppLayout: o hero é full-bleed e não quer
-          barra de navegação em cima. */}
-      <Route path="/" element={<Landing />} />
-
-      <Route element={<AppLayout />}>
-        <Route path="/dashboard" element={<Dashboard />} />
+      {/* Uma casca só, que não desenha cromo nenhum — existe para montar o
+          fundo uma vez. O app é página única, mas o router fica: /sources/:id
+          precisa ser link compartilhável, e o catch-all precisa existir. */}
+      <Route element={<RootLayout />}>
+        <Route path="/" element={<Home />} />
         <Route path="/sources/:id" element={<SourceDetail />} />
+        <Route path="*" element={<NotFound />} />
       </Route>
-
-      <Route path="*" element={<NotFound />} />
     </Routes>
   )
 }

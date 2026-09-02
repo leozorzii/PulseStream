@@ -23,6 +23,14 @@ const SentimentAnalysisCard = React.forwardRef<
 >(({ title, slices, className, ...props }, ref) => {
   const semMovimento = useReducedMotion()
 
+  // useId e não string fixa: três cards na mesma página produziam três
+  // elementos com id="sentiment-card-title", e como role="region" EXIGE nome
+  // acessível, o aria-labelledby de todos resolvia para o PRIMEIRO — os cards
+  // 2 e 3 anunciavam o título do card 1.
+  // Nota: no React 19 o valor sai como «r0». É id HTML válido, mas NÃO é
+  // seletor CSS válido — quem usar em querySelector precisa de CSS.escape.
+  const tituloId = React.useId()
+
   const total = React.useMemo(
     () => slices.reduce((acc, s) => acc + s.value, 0),
     [slices]
@@ -47,13 +55,13 @@ const SentimentAnalysisCard = React.forwardRef<
         "w-full rounded-xl border bg-card p-6 text-card-foreground shadow-sm",
         className
       )}
-      aria-labelledby="sentiment-card-title"
+      aria-labelledby={tituloId}
       role="region"
       {...props}
     >
       <div className="mb-4 flex items-center justify-between">
         <h3
-          id="sentiment-card-title"
+          id={tituloId}
           className="text-lg font-semibold text-card-foreground"
         >
           {title}
@@ -80,12 +88,15 @@ const SentimentAnalysisCard = React.forwardRef<
         <>
           <div
             className="relative mb-4 flex h-4 w-full overflow-hidden rounded-full bg-muted"
-            role="progressbar"
+            // role="img" e não "progressbar": barra de progresso sem
+            // aria-valuenow é anunciada como INDETERMINADA ("carregando"), o
+            // oposto do que isto é. E semanticamente não é progresso: são três
+            // partes somando 100%. role="img" faz virar um nó atômico com o
+            // label abaixo, que é exatamente a intenção.
+            role="img"
             aria-label={`Distribuição de sentimento: ${slices
               .map((s) => `${SENTIMENT[s.tone].label} ${percentual(s.value, total)}%`)
               .join(", ")}`}
-            aria-valuemin={0}
-            aria-valuemax={100}
           >
             {slices.map((slice, index) => (
               <motion.div

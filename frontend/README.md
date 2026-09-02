@@ -39,6 +39,12 @@ oxlint does no type-aware analysis. The two gates do not overlap.
 | `services/` | the HTTP layer — `api.ts` is the configured axios instance |
 | `lib/` | helpers: `cn()`, the sentiment map |
 
+The cross-pattern background (`PlusBackground`) mounts once in
+`components/layout/RootLayout.tsx`, `fixed` and `-z-10`. It uses the SVG as a
+CSS **mask** and paints with a gradient, so the colour comes from
+`hsl(var(--primary))` — a data URI is an opaque string and would never
+resolve a CSS variable.
+
 Each folder has its own README with the conventions for it.
 
 Imports use the `@/` alias for `src/`. It is declared in **both**
@@ -57,6 +63,13 @@ text-foreground  text-card-foreground  text-muted-foreground
 bg-primary  border-border  ring-ring  bg-destructive
 text-sentiment-positive / -neutral / -negative
 ```
+
+> ⚠️ **Text directly on the page background must not use
+> `text-muted-foreground`.** The cross pattern sits behind everything at up
+> to 40% brand cyan, and muted-foreground over a cross stroke measures
+> 3.62:1 — below the 4.5:1 AA floor. Use `text-foreground/70` (5.12:1) out
+> there; `text-muted-foreground` is safe **inside a card**, because
+> `bg-card` is opaque and hides the pattern completely.
 
 > ⚠️ **`accent` is not the brand colour.** Under the shadcn convention
 > `accent` is a subtle hover surface; the brand teal is **`primary`**. This
