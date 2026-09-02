@@ -11,6 +11,10 @@ type SentimentMeta = {
    *  gerada, e a barra renderiza transparente sem erro nenhum. */
   barClass: string
   textClass: string
+  /** Cor pronta para SVG/Recharts, que não aceita classe do Tailwind — o
+   *  atributo fill/stroke precisa de um valor CSS de verdade. Mesmo token
+   *  das classes acima, então gráfico e badge nunca divergem. */
+  cor: string
   icon: LucideIcon
 }
 
@@ -19,18 +23,21 @@ export const SENTIMENT: Record<SentimentLabel, SentimentMeta> = {
     label: "Positivo",
     barClass: "bg-sentiment-positive",
     textClass: "text-sentiment-positive",
+    cor: "hsl(var(--sentiment-positive))",
     icon: Smile,
   },
   NEU: {
     label: "Neutro",
     barClass: "bg-sentiment-neutral",
     textClass: "text-sentiment-neutral",
+    cor: "hsl(var(--sentiment-neutral))",
     icon: Meh,
   },
   NEG: {
     label: "Negativo",
     barClass: "bg-sentiment-negative",
     textClass: "text-sentiment-negative",
+    cor: "hsl(var(--sentiment-negative))",
     icon: Frown,
   },
 }

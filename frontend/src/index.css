@@ -63,7 +63,12 @@
     --radius: 0.75rem;
 
     /* Vocabulario do dominio: espelha os labels POS / NEU / NEG da API. */
-    --sentiment-positive: 145 60% 45%;
+    /* 33% e não 45%: o validador de paleta reprovou a faixa de luminosidade
+       do verde claro sobre superficie escura. Verde x vermelho fica em dE 6.4
+       sob deuteranopia (limiar 8), o que so e permitido COM codificacao
+       secundaria — por isso toda marca colorida deste app vem com icone e
+       rotulo, nunca cor sozinha. */
+    --sentiment-positive: 145 63% 33%;
     --sentiment-neutral: 215 12% 55%;
     --sentiment-negative: 0 65% 55%;
   }
