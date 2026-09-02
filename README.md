@@ -145,24 +145,81 @@ PulseStream is under **active development**. This section is kept honest — it 
 
 ## Getting Started
 
-> ⚠️ The project is mid-development. Today you can run the **API, the RSS ingestion pipeline and the full test suite**. Background processing requires a running Redis broker; MCP server and Docker are still pending.
+> ⚠️ The project is under active development, but the full pipeline runs today: ingestion, background sentiment analysis, the REST API and the MCP server. Docker Compose is the quickest way to get all of it up.
+
+### Running with Docker (recommended)
+
+One command brings up the whole system — no local Python, Redis or virtualenv required.
 
 ```bash
 # 1. Clone
 git clone https://github.com/<your-username>/PulseStream.git
 cd PulseStream
 
-# 2. Create & activate a virtual environment
+# 2. Create the .env file (required — the app will not boot without SECRET_KEY)
+cp .env.example .env
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+# paste the generated key into .env
+
+# 3. Bring everything up
+docker compose up
+```
+
+This starts four services:
+
+| Service  | Role                    | Where                   |
+| -------- | ----------------------- | ----------------------- |
+| `web`    | Django app              | <http://localhost:8000> |
+| `worker` | Celery worker           | executes the tasks      |
+| `beat`   | Celery beat             | schedules them          |
+| `redis`  | broker & result backend | port 6379               |
+
+Useful variants:
+
+```bash
+docker compose up -d          # detached
+docker compose logs -f        # follow the logs
+docker compose down           # tear everything down
+docker compose up --build     # rebuild after changing requirements.txt or the Dockerfile
+```
+
+Source code is mounted as a volume, so editing a `.py` file does **not** require a rebuild.
+
+### Running locally (without Docker)
+
+```bash
+# after cloning and creating .env as above
 python -m venv venv
 venv\Scripts\activate        # Windows
 # source venv/bin/activate   # macOS / Linux
 
-# 3. Install dependencies
 pip install -r requirements.txt
-
-# 4. Run the tests
+python manage.py migrate
 python -m pytest
 ```
+
+The test suite is fully mocked and offline — it needs neither Redis nor network access. Running the app itself, however, needs Redis plus a Celery worker and beat process; see [docs/guia.md](docs/guia.md) for the four-terminal setup.
+
+---
+
+## 🔌 MCP Server
+
+`mcp_server/server.py` exposes PulseStream's data to an AI assistant through the [Model Context Protocol](https://modelcontextprotocol.io), so the sentiment data can be queried in natural language.
+
+Two tools are available:
+
+| Tool                                | Returns                                                          |
+| ----------------------------------- | ---------------------------------------------------------------- |
+| `listar_fontes()`                   | the active content sources — id, name, platform                   |
+| `resumo_sentimento_fonte(source_id)` | positive / neutral / negative percentages for one source          |
+
+Try them with the official inspector, from the repo root with the virtualenv active:
+
+```bash
+npx @modelcontextprotocol/inspector python mcp_server/server.py
+```
+
+The server runs over stdio, so it works with local clients today (the inspector, or Claude Desktop via `claude_desktop_config.json`). Serving it over HTTP for remote clients is on the roadmap.
 
 ---
 
@@ -184,13 +241,13 @@ python -m pytest
 
 ## Roadmap
 
-The next milestones, in order of priority:
+The pipeline is complete end to end. What remains, in order of priority:
 
-1. Finish the `analytics` engine (sentiment classification + metrics).
-2. Build the `stream_core` domain layer (services & selectors).
-3. Implement data ingestion with Celery.
-4. Expose everything through the REST API and the MCP server.
-5. Containerize and wire up CI/CD.
+1. Finish the `analytics` engine — `topic_model.py` and `metrics.py` are still empty.
+2. Improve sentiment accuracy: expand the word lists and stopwords ([#15](https://github.com/leozorzii/PulseStream/issues/15)).
+3. Spike LLM-based sentiment analysis as an alternative to the lexicon approach ([#16](https://github.com/leozorzii/PulseStream/issues/16)).
+4. Expose the MCP server over HTTP, so it works beyond a local stdio client.
+5. Move from SQLite to PostgreSQL, and add automated deploy (CD).
 
 ---
 
