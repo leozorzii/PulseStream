@@ -1,61 +1,122 @@
 /** @type {import('tailwindcss').Config} */
 
 /*
- * SEMANTIC COLOR TOKENS
- * ---------------------
- * Never use raw Tailwind colors (bg-gray-100, text-red-600) in components.
- * Use the semantic tokens below instead, so the whole UI can be re-themed
- * from one place and a dark theme is a variable swap, not a refactor.
+ * DESIGN TOKENS — convencao shadcn/ui
+ * -----------------------------------
+ * Componente nunca nomeia cor crua (bg-zinc-900, text-red-500). Nomeia um
+ * PAPEL: bg-background, bg-card, text-muted-foreground, border-border. Esse e
+ * o mesmo vocabulario que os componentes do shadcn/ui e do 21st.dev usam,
+ * entao da pra colar um componente sem editar nada e ele herda esta paleta.
  *
- * Available tokens:
+ * Os valores vivem como triplas HSL em src/index.css ("200 20% 6%") e sao
+ * consumidos aqui como hsl(var(--x)). Guardar a tripla em vez da cor pronta
+ * e o que deixa o Tailwind emitir hsl(var(--card) / 0.5) para bg-card/50.
  *
- *   Surfaces & text
- *     bg-background      page background
- *     bg-surface         cards, panels, anything raised above the page
- *     border-border      dividers and outlines
- *     text-text-primary  headings and body copy
- *     text-text-muted    secondary/supporting copy
- *     bg-accent          primary actions, links, focus rings
- *
- *   Sentiment (the domain's core vocabulary)
- *     sentiment-positive   maps to the "POS" label
- *     sentiment-neutral    maps to the "NEU" label
- *     sentiment-negative   maps to the "NEG" label
- *
- * Each token works with every Tailwind utility that takes a color
- * (bg-, text-, border-, ring-, fill-, stroke-) and supports opacity
- * modifiers, e.g. bg-sentiment-positive/10 for a soft badge background.
- *
- * The actual values live as CSS variables in src/index.css, defined once
- * for light and once under .dark — see that file to change the palette.
- *
- * Note: colors are stored as space-separated RGB channels ("22 163 74"),
- * not hex. That is what makes the <alpha-value> placeholder work; a hex
- * value there would break every opacity modifier.
+ * Papeis:
+ *   background / foreground      a pagina em si
+ *   card / popover               superficies elevadas
+ *   primary                      o teal da marca: acoes, links, foco
+ *   secondary / muted / accent   preenchimentos cada vez mais discretos.
+ *                                ATENCAO: accent aqui e superficie de HOVER,
+ *                                NAO a cor da marca. A marca e primary.
+ *   destructive                  erros e acoes perigosas
+ *   border / input / ring        linhas e contorno de foco
+ *   sentiment.{positive,neutral,negative}
+ *                                vocabulario do dominio, espelha os labels
+ *                                POS / NEU / NEG que a API devolve
  */
 
-// helper so every token supports opacity modifiers
-const token = (name) => `rgb(var(${name}) / <alpha-value>)`
-
 export default {
-  content: ["./index.html", "./src/**/*.{js,jsx}"],
-  darkMode: "class", // toggle by putting .dark on <html>
+  darkMode: "class",
+  // ts,tsx e obrigatorio: sem isso o app renderiza SEM ESTILO NENHUM e o
+  // build passa em silencio, porque o Tailwind so nao acha as classes
+  content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
+    container: {
+      center: true,
+      padding: "2rem",
+      screens: { "2xl": "1400px" },
+    },
     extend: {
+      /*
+       * TIPOGRAFIA
+       * ----------
+       * `sans` e `display` sao os nomes das CHAVES do Tailwind, nao uma
+       * afirmacao sobre a classificacao da fonte — a Piazzolla e serifada.
+       * `sans` e a familia que o preflight aplica no <html>, entao sobrescrever
+       * essa chave e o que faz a Piazzolla virar o padrao de tudo sem precisar
+       * marcar componente por componente.
+       *
+       * Piazzolla tem eixo de tamanho optico (opsz 8..30): o desenho se ajusta
+       * sozinho conforme o corpo, que e justamente o que segura a legibilidade
+       * nos percentuais pequenos dos cards.
+       *
+       * Oswald e condensada e vai so nos titulos grandes, via font-display.
+       */
+      fontFamily: {
+        sans: ["Piazzolla", "ui-serif", "Georgia", "serif"],
+        display: ["Oswald", "ui-sans-serif", "system-ui", "sans-serif"],
+      },
       colors: {
-        background: token("--color-background"),
-        surface: token("--color-surface"),
-        border: token("--color-border"),
-        "text-primary": token("--color-text-primary"),
-        "text-muted": token("--color-text-muted"),
-        accent: token("--color-accent"),
-        sentiment: {
-          positive: token("--color-sentiment-positive"),
-          neutral: token("--color-sentiment-neutral"),
-          negative: token("--color-sentiment-negative"),
+        border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))",
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+        primary: {
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
         },
+        secondary: {
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
+        },
+        destructive: {
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
+        },
+        muted: {
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--muted-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
+        popover: {
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
+        },
+        card: {
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
+        },
+        sentiment: {
+          positive: "hsl(var(--sentiment-positive))",
+          neutral: "hsl(var(--sentiment-neutral))",
+          negative: "hsl(var(--sentiment-negative))",
+        },
+      },
+      borderRadius: {
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
+      },
+      keyframes: {
+        "accordion-down": {
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
+        },
+        "accordion-up": {
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+      },
+      animation: {
+        "accordion-down": "accordion-down 0.2s ease-out",
+        "accordion-up": "accordion-up 0.2s ease-out",
       },
     },
   },
-  plugins: [],
+  plugins: [require("tailwindcss-animate")],
 }

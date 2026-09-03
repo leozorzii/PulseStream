@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    "strict": true,
+    "noFallthroughCasesInSwitch": true,
+
+    /* Deixados desligados de proposito: o template padrao do Vite os liga, e
+       ai todo icone nao usado de um componente colado do 21st.dev vira FALHA
+       DE BUILD, nao aviso. O oxlint ja reporta variavel nao usada como lint. */
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src"]
+}
