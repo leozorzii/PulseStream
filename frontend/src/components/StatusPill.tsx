@@ -36,7 +36,9 @@ export function StatusPill({
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-2.5 rounded-full border border-border bg-card/80 py-1.5 pl-2.5 pr-4",
+        // Sem superfície própria: quem usa passa a receita ILHA por className.
+        // Duas bordas empilhadas saem as duas no HTML.
+        "inline-flex items-center gap-2.5 py-1.5 pl-2.5 pr-4",
         className
       )}
       // status: leitor de tela anuncia a mudança sem roubar o foco

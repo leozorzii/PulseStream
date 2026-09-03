@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button"
  *  padrão de cruzes, que vive numa camada -z-10 atrás. */
 export default function NotFound() {
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 px-4 text-center">
+    // pt do tamanho do cabeçalho: com a barra fora do fluxo, justify-center
+    // centraria contra a viewport inteira e o conteúdo subiria por baixo dela.
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 px-4 pt-[--altura-cabecalho] text-center">
       <p className="text-sm font-medium text-primary">404</p>
       <h1 className="font-display text-4xl font-semibold uppercase tracking-wide">Página não encontrada</h1>
       <p className="text-foreground/70">

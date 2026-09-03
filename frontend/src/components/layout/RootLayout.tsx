@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Outlet, useLocation } from "react-router-dom"
 
-import { PlusBackground } from "@/components/PlusBackground"
+import { BeamsBackground } from "@/components/BeamsBackground"
 import { SiteHeader } from "@/components/layout/SiteHeader"
 import { useColeta } from "@/hooks/useColeta"
 import { useScrollSpy } from "@/hooks/useScrollSpy"
@@ -32,7 +32,7 @@ export default function RootLayout() {
 
   return (
     <div className="min-h-dvh">
-      <PlusBackground />
+      <BeamsBackground />
 
       <SiteHeader
         // Fora da home não existe seção nenhuma para marcar, e o scroll-spy

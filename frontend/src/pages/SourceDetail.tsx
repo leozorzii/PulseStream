@@ -52,7 +52,9 @@ export default function SourceDetail() {
   const semDados = fonte.post_count === 0
 
   return (
-    <div className="container mx-auto px-4 py-10">
+    // O cabeçalho é fixed e não ocupa fluxo: sem este pt o link de voltar, que
+    // são os primeiros 20px da página, nasce debaixo da barra.
+    <div className="container mx-auto px-4 pb-10 pt-[calc(var(--altura-cabecalho)_+_2.5rem)]">
       <Link
         to="/#fontes"
         className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
@@ -181,7 +183,7 @@ export default function SourceDetail() {
 
 function NaoEncontrada({ id }: { id?: string }) {
   return (
-    <div className="container mx-auto px-4 py-24 text-center">
+    <div className="container mx-auto px-4 pb-24 pt-[calc(var(--altura-cabecalho)_+_6rem)] text-center">
       <h1 className="font-display text-3xl font-semibold uppercase tracking-wide">
         Fonte não encontrada
       </h1>
