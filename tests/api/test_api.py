@@ -23,9 +23,13 @@ def test_list_posts_unprocessed():
     response = client.get("/api/posts/unprocessed/")
     
     assert response.status_code == 200
-    assert len(response.data) == 1
-    
-    
+    #o endpoint passou a devolver envelope paginado, entao a lista vive em
+    #"results" — len(response.data) contaria as 4 chaves do envelope, nao os posts
+    assert response.data["count"] == 1
+    assert len(response.data["results"]) == 1
+    assert response.data["results"][0]["external_id"] == "pendente"
+
+
 @pytest.mark.django_db
 def test_summary_one_source():
     fonte = create_content_source(name="Canal", plataform="YOUTUBE", external_id="UC_sum")
@@ -52,5 +56,27 @@ def test_summary_without_source_id_returns_400():
     assert response.status_code == 400
   
   
-  # ----------------Trigger---------------------------
-  # os testes do trigger vivem em tests/api/test_trigger_ingestion.py
+#----------------------PAGINACAO---------------------------
+
+@pytest.mark.django_db
+def test_active_sources_retorna_resposta_paginada():
+    #duas fontes ativas, o suficiente para o count ter o que contar
+    create_content_source(name="Canal A", plataform="YOUTUBE", external_id="UC_pag_a")
+    create_content_source(name="Canal B", plataform="NEWS", external_id="UC_pag_b")
+
+    client = APIClient()
+    response = client.get("/api/sources/")
+
+    assert response.status_code == 200
+
+    #o contrato do DRF paginado: envelope com as quatro chaves, e nao array cru
+    assert "count" in response.data
+    assert "next" in response.data
+    assert "previous" in response.data
+    assert "results" in response.data
+
+    #o teste e de que a view aplica paginacao, nao de que a paginacao do
+    #DRF funciona — por isso duas fontes e nao 25 para conferir a pagina 2.
+    #Aquilo seria testar biblioteca de terceiro.
+    assert response.data["count"] == 2
+    assert len(response.data["results"]) == 2        

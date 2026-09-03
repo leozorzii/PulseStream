@@ -8,21 +8,40 @@ from apps.ingestion.services import run_ingestion
 from rest_framework import status
 from apps.ingestion.exceptions import FeedFetchError
 from apps.ingestion.tasks import processar_sentimentos
+from apps.api.pagination import StandardPagination
 class ActiveSourceListView(APIView):
     """Endpoint que lista as fontes de conteudo ativas (GET)."""
     #responde a requisicoes GET
     def get(self, request):
-        """Retorna a lista de fontes de conteúdo ativas em JSON."""
+        """Retorna a lista de fontes de conteúdo ativas, paginada."""
         fontes = get_active_sources() #chama o seletor
-        serializer = ContentSourceSerializer(fontes, many=True) #traduz para JSON, o many demonstra que sao varios 
-        return Response(serializer.data) #devolve
+
+        # Paginacao aplicada A MAO. APIView nao pagina sozinha: quem le
+        # DEFAULT_PAGINATION_CLASS e o mixin dos generics do DRF (ListAPIView e
+        # afins), que estas views nao usam. Configurar aquilo no settings
+        # ficaria sem efeito e daria a impressao de estar ligado.
+        paginator = StandardPagination()
+
+        # Pagina ANTES de serializar: paginate_queryset fatia o queryset, entao
+        # o serializer so toca os 20 desta pagina. Serializar primeiro traria o
+        # backlog inteiro do banco para a memoria para depois jogar fora quase
+        # tudo — que e exatamente o problema que a issue #32 descreve.
+        pagina = paginator.paginate_queryset(fontes, request)
+        serializer = ContentSourceSerializer(pagina, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
 class UnprocessedPostsListView(APIView):
-    """Endpoint que lista os posts ainda nao processados (GET)"""
+    """Endpoint que lista os posts ainda nao processados (GET), paginado."""
     def get(self, request):
         posts = get_unprocessed_posts()
-        serializer = RawPostSerializer(posts, many=True)
-        return Response(serializer.data) 
+
+        # Mesma paginacao manual da view acima, pelo mesmo motivo. Aqui ela
+        # importa ainda mais: a fila de nao processados e ilimitada por
+        # natureza e cresce sozinha quando o worker fica fora do ar.
+        paginator = StandardPagination()
+        pagina = paginator.paginate_queryset(posts, request)
+        serializer = RawPostSerializer(pagina, many=True)
+        return paginator.get_paginated_response(serializer.data)
     
 class SentimentSummaryView(APIView):
     """Endpoint que retorna o resumo de sentimento de uma fonte (GET ?source_id)
