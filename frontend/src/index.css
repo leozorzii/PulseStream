@@ -62,6 +62,10 @@
 
     --radius: 0.75rem;
 
+    /* Altura do cabecalho fixo. Tres lugares precisam do mesmo numero: o
+       proprio header, o scroll-padding abaixo e o calculo de altura do heroi. */
+    --altura-cabecalho: 64px;
+
     /* Vocabulario do dominio: espelha os labels POS / NEU / NEG da API. */
     /* 33% e não 45%: o validador de paleta reprovou a faixa de luminosidade
        do verde claro sobre superficie escura. Verde x vermelho fica em dE 6.4
@@ -90,9 +94,17 @@
     @apply bg-background text-foreground antialiased;
   }
 
-  /* Rolagem suave só para a âncora #analises do herói. Fica atrás da media
-     query porque scroll animado é gatilho vestibular, e scroll-behavior no
-     html afeta TODA rolagem programática da página. */
+  /* Rolagem suave para as âncoras de seção. Fica atrás da media query porque
+     scroll animado é gatilho vestibular, e scroll-behavior no html afeta TODA
+     rolagem programática da página. */
+  /* scroll-padding-top e nao scroll-mt-* nas secoes: uma regra so cobre TODA
+     ancora, inclusive as de foco, e nao ha como esquecer numa secao nova.
+     Atencao: scroll-mt-* e UTILITARIO e venceria esta regra de base, entao
+     nao pode conviver com ela — foi removido das secoes. */
+  html {
+    scroll-padding-top: calc(var(--altura-cabecalho) + 1rem);
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     html {
       scroll-behavior: smooth;

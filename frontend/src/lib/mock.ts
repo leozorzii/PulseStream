@@ -214,6 +214,34 @@ export const MOCK_POSTS: PostAnalisado[] = [
     source: { id: 4, name: "G1 Tecnologia", plataform: "NEWS" },
     sentiment: { label: "POS", polarity_score: 0.61, extracted_keywords: ["interface", "rápida"] },
   },
+  /* Os três abaixo são mais antigos DE PROPÓSITO: com todos os posts na mesma
+   * semana, trocar o filtro de período não mudava a lista e dava a impressão
+   * de que o feed ignorava o controle. Dado de exemplo tem que exercitar o
+   * comportamento, senão esconde justamente o que precisa ser conferido. */
+  {
+    id: 902,
+    text_content:
+      "Sistema fora do ar desde ontem e nenhuma posição oficial. Prejuízo acumulando.",
+    published_at: "2026-08-21T10:30:00-03:00",
+    source: { id: 9, name: "Canal de Reclamações", plataform: "YOUTUBE" },
+    sentiment: { label: "NEG", polarity_score: -0.88, extracted_keywords: ["sistema", "prejuízo"] },
+  },
+  {
+    id: 874,
+    text_content:
+      "Migração concluída sem downtime. Equipe de infraestrutura fez um trabalho impecável.",
+    published_at: "2026-08-16T14:10:00-03:00",
+    source: { id: 4, name: "G1 Tecnologia", plataform: "NEWS" },
+    sentiment: { label: "POS", polarity_score: 0.77, extracted_keywords: ["migração", "equipe"] },
+  },
+  {
+    id: 841,
+    text_content:
+      "Balanço trimestral divulgado. Receita estável, sem variação relevante frente ao período anterior.",
+    published_at: "2026-08-09T09:00:00-03:00",
+    source: { id: 7, name: "G1 Economia", plataform: "NEWS" },
+    sentiment: { label: "NEU", polarity_score: -0.04, extracted_keywords: ["balanço", "receita"] },
+  },
 ]
 
 // ------------------------------------------------------------- palavras-chave

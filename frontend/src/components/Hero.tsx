@@ -14,7 +14,7 @@ export function Hero({
   title = "PulseStream",
   subtitle = "O pulso da opinião pública, em tempo real.",
   ctaLabel = "Ver análises",
-  ctaTargetId = "analises",
+  ctaTargetId = "visao-geral",
 }: HeroProps) {
   const semMovimento = useReducedMotion()
   const words = title.split(" ")
@@ -23,7 +23,10 @@ export function Hero({
     // min-h-dvh, não min-h-screen: 100vh no mobile é a altura COM a barra de
     // URL recolhida, então o herói fica alto demais e o CTA nasce fora da tela.
     // Sem bg-*: o padrão de cruzes precisa aparecer atrás daqui.
-    <section className="flex min-h-dvh w-full items-center justify-center px-4 py-16">
+    // ATENCAO Tailwind v3: em valor arbitrario o parser converte _ em espaco,
+    // e calc() EXIGE espaco em volta do sinal. Escrito sem os underscores,
+    // calc(100dvh-var(--x)) e CSS invalido: nao ha erro e nao ha altura.
+    <section className="flex min-h-[calc(100dvh_-_var(--altura-cabecalho))] w-full items-center justify-center px-4 py-16">
       <div className="mx-auto max-w-4xl text-center">
         <h1 className="mb-6 font-display text-6xl font-bold uppercase tracking-tight sm:text-8xl md:text-9xl">
           {words.map((word, wordIndex) => (

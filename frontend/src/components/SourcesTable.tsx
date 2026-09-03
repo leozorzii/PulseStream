@@ -1,32 +1,14 @@
 import * as React from "react"
 import { motion, useReducedMotion } from "framer-motion"
 import { Link } from "react-router-dom"
-import {
-  AtSign,
-  Camera,
-  Hash,
-  MessageSquare,
-  Newspaper,
-  Video,
-  type LucideIcon,
-} from "lucide-react"
+import { Hash } from "lucide-react"
 
 import { SentimentMeter } from "@/components/SentimentMeter"
 import { Button } from "@/components/ui/button"
 import { haQuantoTempo } from "@/lib/format"
+import { PLATAFORMA } from "@/lib/plataforma"
 import { cn } from "@/lib/utils"
-import type { Fonte, Plataforma } from "@/lib/mock"
-
-/* O lucide removeu os ícones de marca (Instagram, Twitter, YouTube) por
- * questão de marca registrada, então usamos genéricos que descrevem o MEIO
- * em vez da empresa — o que envelhece melhor de qualquer forma. */
-const PLATAFORMA: Record<Plataforma, { rotulo: string; icone: LucideIcon }> = {
-  NEWS: { rotulo: "Portal de Notícias", icone: Newspaper },
-  YOUTUBE: { rotulo: "YouTube", icone: Video },
-  TWITTER: { rotulo: "Twitter / X", icone: AtSign },
-  INSTAGRAM: { rotulo: "Instagram", icone: Camera },
-  REDDIT: { rotulo: "Reddit", icone: MessageSquare },
-}
+import type { Fonte } from "@/lib/mock"
 
 export function SourcesTable({
   fontes,
