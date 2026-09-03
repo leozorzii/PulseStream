@@ -66,6 +66,12 @@
        proprio header, o scroll-padding abaixo e o calculo de altura do heroi. */
     --altura-cabecalho: 64px;
 
+    /* Cor dos feixes de luz do fundo. Matiz da marca, saturação derrubada:
+       --primary a 75% num campo desse tamanho não lê como luz, lê como fundo
+       teal — e disputaria com text-primary e bg-primary exatamente o mesmo
+       sinal. Pico de alfa 0.08; sobre ele text-muted-foreground mede 5.76:1. */
+    --feixe: 193 40% 70%;
+
     /* Vocabulario do dominio: espelha os labels POS / NEU / NEG da API. */
     /* 33% e não 45%: o validador de paleta reprovou a faixa de luminosidade
        do verde claro sobre superficie escura. Verde x vermelho fica em dE 6.4

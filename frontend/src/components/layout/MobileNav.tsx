@@ -11,7 +11,13 @@ import type { Fonte } from "@/lib/mock"
  *  de links. Sem layoutId de propósito: o nav desktop fica `hidden`, não
  *  desmontado, e duas instâncias vivas do mesmo layoutId fariam o framer
  *  interpolar contra uma caixa de tamanho zero. */
-export function MobileNav({ fontes }: { fontes: Fonte[] }) {
+export function MobileNav({
+  fontes,
+  classeIlha,
+}: {
+  fontes: Fonte[]
+  classeIlha?: string
+}) {
   const [aberto, setAberto] = React.useState(false)
   const { pathname } = useLocation()
   const naHome = pathname === "/"
@@ -30,13 +36,23 @@ export function MobileNav({ fontes }: { fontes: Fonte[] }) {
         onClick={() => setAberto((v) => !v)}
         aria-expanded={aberto}
         aria-label={aberto ? "Fechar menu" : "Abrir menu"}
-        className="rounded-md p-2 text-foreground/70 transition-colors hover:text-foreground md:hidden"
+        className={cn(
+          "p-2 text-foreground/70 transition-colors hover:text-foreground md:hidden",
+          classeIlha
+        )}
       >
         {aberto ? <X className="h-5 w-5" aria-hidden /> : <Menu className="h-5 w-5" aria-hidden />}
       </button>
 
       {aberto && (
-        <div className="absolute inset-x-0 top-full z-50 border-b border-border bg-popover shadow-xl md:hidden">
+        /* fixed, não absolute: antes o painel colava na borda de baixo do
+           container interno do header — com a barra flutuante isso é "colado
+           numa barra que não é desenhada", e o border-b prometia um encaixe
+           que sumiu. É legal aninhar fixed em fixed: position:fixed sozinho
+           NÃO cria bloco contentor para descendente fixed; só transform,
+           filter e contain:paint criam — por isso o SiteHeader proíbe os três.
+           pointer-events-auto explícito porque o <header> é none e herda. */
+        <div className="pointer-events-auto fixed inset-x-4 top-[calc(var(--altura-cabecalho)_+_0.5rem)] z-50 overflow-hidden rounded-2xl border bg-popover shadow-xl md:hidden">
           <nav aria-label="Menu">
             <ul className="py-2">
               {SECOES.map((secao) => (

@@ -1,3 +1,5 @@
+import * as React from "react"
+
 import { Hero } from "@/components/Hero"
 import { KpiCard } from "@/components/KpiCard"
 import { PostsFeed } from "@/components/PostsFeed"
@@ -9,6 +11,7 @@ import {
   SentimentTrendChart,
 } from "@/components/charts/SentimentTrendChart"
 import { useContextoApp } from "@/hooks/useContextoApp"
+import { haQuantoTempo } from "@/lib/format"
 import { SENTIMENT } from "@/lib/sentiment"
 import { agregarPeriodo, fatiarPosts, fatiarSerie } from "@/lib/periodo"
 import {
@@ -22,6 +25,12 @@ import {
 
 export default function Home() {
   const { periodo, coletandoId, coletar } = useContextoApp()
+
+  /* Lê o relógio UMA vez, na montagem — mesma regra do SourceDetail. Este
+     componente re-renderiza a cada troca de período, e Date.now() no render
+     faria o "há N h" mudar junto sem motivo. */
+  const [agora] = React.useState(() => Date.now())
+  const fontesAtivas = MOCK_FONTES.filter((f) => f.is_active).length
 
   /* Tudo que tem eixo de tempo é DERIVADO da série fatiada, e não dos campos
    * estáticos do MOCK_OVERVIEW. É o que torna o filtro do cabeçalho honesto:
@@ -46,7 +55,13 @@ export default function Home() {
 
   return (
     <>
-      <Hero />
+      <Hero
+        selo={{
+          primario: `${fontesAtivas} ${fontesAtivas === 1 ? "fonte ativa" : "fontes ativas"}`,
+          secundario: `última coleta ${haQuantoTempo(MOCK_OVERVIEW.last_collected_at, agora)}`,
+          href: "visao-geral",
+        }}
+      />
 
       {/* Visão geral ------------------------------------------------------ */}
       <section id="visao-geral" className="container mx-auto px-4 pt-10">
