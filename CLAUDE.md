@@ -17,7 +17,7 @@ tests/             pytest, mirrors the apps/ layout
 
 ```bash
 # backend (venv at ./venv)
-venv/Scripts/python.exe -m pytest          # 43 passed, 1 xfailed — fully offline
+venv/Scripts/python.exe -m pytest          # 44 passed, 1 xfailed — fully offline
 venv/Scripts/python.exe manage.py check
 
 # frontend (cd frontend)
@@ -216,15 +216,31 @@ these:
   non-numeric. Labels with zero occurrences are **absent**, not `0`.
 - Percentages come back as raw floats (`66.66666666666666`) and can sum to
   `99.99999999999999`.
-- No pagination anywhere — list endpoints return bare arrays.
+- List endpoints answer with the DRF envelope — `{count, next, previous,
+  results}` — not a bare array. Page size is 20.
 - The trigger endpoint does a **synchronous** feed fetch inside the request, and
   sentiment is *not* ready when its 200 returns (Celery runs after).
 
-Nine issues labelled **`dependencia-backend`** (#24–#32) describe the endpoints
+**Pagination is applied by hand in each view.** `DEFAULT_PAGINATION_CLASS` in
+settings is read by the mixin the DRF *generics* use, and these views are plain
+`APIView` — setting it would look enabled and do nothing. Every new list
+endpoint has to instantiate `StandardPagination` itself
+(`apps/api/pagination.py`), and must `paginate_queryset` **before** serializing,
+so the `LIMIT` reaches the database instead of the whole table reaching memory.
+
+A paginated queryset needs a deterministic `order_by`, or the database may
+return different sequences across queries and an item lands on two pages or on
+none. DRF flags this as `UnorderedObjectListWarning` — treat that warning as a
+bug, not noise.
+
+The issues labelled **`dependencia-backend`** (#24–#32) describe the endpoints
 the dashboard needs, each with a suggested JSON shape and the reasoning behind
-it. Read the issue before designing the endpoint — several record decisions
-(counts vs percentages, nesting the source, grouping by `published_at` rather
-than `processed_at`) that the frontend already depends on.
+it. `gh issue list --label dependencia-backend` is the live list; a count here
+would go stale on the first merge.
+
+Read the issue before designing the endpoint — several record decisions (counts
+vs percentages, nesting the source, grouping by `published_at` rather than
+`processed_at`) that the frontend already depends on.
 
 ---
 

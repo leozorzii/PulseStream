@@ -2,13 +2,21 @@ from apps.stream_core.models import ContentSource,SentimentAnalysis, RawPost
 from collections import Counter #contador automatico
 
 def get_active_sources():
-    """Metodo que retorna todas as fontes ativas
-    
-    
-    Returns: 
-        QuerySet[ContentSource]: fonte com is_active=True
+    """Metodo que retorna todas as fontes ativas, em ordem estavel
+
+    A ordenacao NAO e cosmetica: paginacao exige ordem deterministica. Sem
+    order_by o banco nao garante a mesma sequencia entre duas consultas, entao
+    ao paginar um item pode sair na pagina 1 E na 2, e outro em nenhuma. O DRF
+    avisa disso com UnorderedObjectListWarning.
+
+    Por nome porque e a ordem util na interface (lista alfabetica de fontes),
+    com id como desempate — nome nao e unico no model, e sem o desempate duas
+    fontes homonimas voltariam ao problema de ordem instavel entre elas.
+
+    Returns:
+        QuerySet[ContentSource]: fontes com is_active=True, ordenadas por nome
     """
-    return ContentSource.objects.filter(is_active=True)
+    return ContentSource.objects.filter(is_active=True).order_by("name", "id")
 
 
 def get_unprocessed_posts():
