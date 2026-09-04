@@ -17,7 +17,7 @@ tests/             pytest, mirrors the apps/ layout
 
 ```bash
 # backend (venv at ./venv)
-venv/Scripts/python.exe -m pytest          # 44 passed, 1 xfailed — fully offline
+venv/Scripts/python.exe -m pytest          # 55 passed, 1 xfailed — fully offline
 venv/Scripts/python.exe manage.py check
 
 # frontend (cd frontend)
@@ -211,15 +211,40 @@ these:
 - The field is spelled **`plataform`** (sic), not `platform`.
 - Hand-written errors use the key **`erro`**; DRF's own use `detail`. Both need
   handling.
-- `/api/analytics/summary/` returns `{}` for "no analyses", "still processing"
-  and "no such source" alike, and **500** if `source_id` is empty or
-  non-numeric. Labels with zero occurrences are **absent**, not `0`.
-- Percentages come back as raw floats (`66.66666666666666`) and can sum to
+- `/api/analytics/summary/` answers `{source_id, state, total_analyzed,
+  total_pending, sentiment}`. `source_id` is **optional**: without it the scope
+  is the whole database and `source_id` comes back `null`. An empty
+  `?source_id=` is a **400**, not the overall scope — absent and empty mean
+  different things.
+- `sentiment` is `null` whenever `state` is not `"ready"`, and carries **all
+  three** labels when it is — a label with zero occurrences is `0.0`, not
+  absent. Percentages are raw floats (`66.66666666666666`) and can sum to
   `99.99999999999999`.
 - List endpoints answer with the DRF envelope — `{count, next, previous,
   results}` — not a bare array. Page size is 20.
 - The trigger endpoint does a **synchronous** feed fetch inside the request, and
   sentiment is *not* ready when its 200 returns (Celery runs after).
+
+**`state` describes the data, never the existence.** The enum is `ready |
+processing | empty`, and it only ever describes a source that *exists*: an
+unknown `source_id` is a **404**, not a 200 with `"empty"`. Keeping those
+separate is the whole point — the old endpoint returned `200 {}` for "nothing
+analysed yet", "nothing collected yet" and "that source is not a thing", so a
+plain bug in the caller was indistinguishable from normal operation.
+
+The state is decided by `total_analyzed` **first**, not by the pending count:
+`> 0` is `ready`, else any post at all is `processing`, else `empty`. Reading it
+in the other order leaves a hole — a source whose posts are all
+`is_processed=True` with zero analyses matches none of the three definitions.
+The pipeline cannot produce that (`save_sentiment_analysis` writes the analysis
+and flips the flag in one `transaction.atomic()`), but deleting a
+`SentimentAnalysis` in the admin can.
+
+`get_sentiment_summary_by_source` still exists **untouched** next to the new
+`get_sentiment_summary`, because `mcp_server/server.py` calls it directly and
+handles its `{}` with its own message. No test covers that path, so changing its
+return shape would break the MCP server in silence. Selectors that something
+outside `apps/` imports get a sibling, not a new signature.
 
 **Pagination is applied by hand in each view.** `DEFAULT_PAGINATION_CLASS` in
 settings is read by the mixin the DRF *generics* use, and these views are plain
