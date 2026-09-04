@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from apps.stream_core.models import ContentSource
 from apps.api.serializers import ContentSourceSerializer, RawPostSerializer
 from apps.ingestion.adapters.rss import RSSAdapter
-from apps.stream_core.selectors import get_active_sources, get_unprocessed_posts, get_sentiment_summary_by_source
+from apps.stream_core.selectors import get_active_sources, get_unprocessed_posts, get_sentiment_summary
 from apps.ingestion.services import run_ingestion
 from rest_framework import status
 from apps.ingestion.exceptions import FeedFetchError
@@ -44,19 +44,62 @@ class UnprocessedPostsListView(APIView):
         return paginator.get_paginated_response(serializer.data)
     
 class SentimentSummaryView(APIView):
-    """Endpoint que retorna o resumo de sentimento de uma fonte (GET ?source_id)
-    """
+    """Endpoint que retorna o resumo de sentimento (GET ?source_id opcional)"""
+
     def get(self, request):
-        source_id = request.query_params.get("source_id") #pega o ?source_id 
-        #caso de borda, caso nao vier o source_id, por isso a escolha do query_parameter
-        if source_id is None:
-            return Response(
-              {"erro": "informe o parametro source_id"},
-              status=status.HTTP_400_BAD_REQUEST, #req mal informada
-            )
-            
-        resume = get_sentiment_summary_by_source(source_id) #seletor
-        return Response(resume) #o dict vira JSON
+        """Retorna o resumo de uma fonte, ou do banco inteiro se nao vier source_id.
+
+        COMO FUNCIONA
+        A view faz as duas perguntas que sao de HTTP e delega o resto: o
+        source_id e um numero? a fonte existe? So depois disso chama o selector,
+        que cuida do dominio (estado, contagens, percentuais).
+
+        AUSENTE E DIFERENTE DE VAZIO
+        Sem o parametro, o escopo e o geral — o painel de visao geral e uma tela
+        real e nao deve precisar inventar um id. Ja `?source_id=` vazio e 400: e
+        o que um <select> sem selecao emite, entao houve intencao de escolher uma
+        fonte, e devolver o panorama global ali mostraria dado geral fingindo ser
+        dado da fonte.
+
+        POR QUE COAGIR PARA int ANTES DE QUALQUER CONSULTA
+        `filter(id="abc")` levanta ValueError la dentro do ORM, sem captura, e o
+        Django responde 500 com corpo HTML. Todo caminho de erro do front le
+        response.data.erro, entao aquilo chegava la como falha de parse de JSON
+        em vez do problema real. O int() no try devolve o mesmo formato {"erro"}
+        dos outros guards.
+
+        POR QUE 404 EM VEZ DE state "empty"
+        O enum descreve a situacao dos DADOS de uma fonte que existe; nao
+        descreve a existencia dela. Um id errado e bug de quem chama, e com 200
+        ficava indistinguivel de operacao normal. Mesma forma de erro que o
+        trigger ja usa ({"erro": "fonte nao encontrada"}).
+
+        Usa exists() e nao get(): a view nao precisa do objeto, so da resposta
+        sim/nao, e assim nao ha excecao para capturar no caminho normal.
+
+        Returns:
+            Response: 200 com o contrato do resumo, 400 se o source_id for
+                invalido (nao numerico ou vazio) ou 404 se a fonte nao existir
+        """
+        source_id = request.query_params.get("source_id") #pega o ?source_id
+
+        if source_id is not None:
+            try:
+                source_id = int(source_id)
+            except ValueError:
+                return Response(
+                    {"erro": "source_id deve ser um numero inteiro"},
+                    status=status.HTTP_400_BAD_REQUEST, #req mal informada
+                )
+
+            if not ContentSource.objects.filter(id=source_id).exists():
+                return Response(
+                    {"erro": "fonte nao encontrada"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        resumo = get_sentiment_summary(source_id) #seletor
+        return Response(resumo) #o dict vira JSON
     
 class TriggerIngestionView(APIView):
     """Endpoint que dispara a coleta de uma fonte (POST)"""
