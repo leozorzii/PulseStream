@@ -17,7 +17,7 @@ tests/             pytest, mirrors the apps/ layout
 
 ```bash
 # backend (venv at ./venv)
-venv/Scripts/python.exe -m pytest          # 59 passed, 1 xfailed — fully offline
+venv/Scripts/python.exe -m pytest          # 72 passed, 1 xfailed — fully offline
 venv/Scripts/python.exe manage.py check
 
 # frontend (cd frontend)
@@ -222,6 +222,15 @@ these:
   `99.99999999999999`.
 - List endpoints answer with the DRF envelope — `{count, next, previous,
   results}` — not a bare array. Page size is 20.
+- `/api/sources/` carries `feed_url`, `last_collected_at`, `post_count`,
+  `pending_count` and `sentiment` alongside the model fields. `sentiment` is
+  `null` when the source has no analyses — same call as the summary endpoint, so
+  the two routes agree. `last_collected_at` is `null` for a source that was
+  never collected, which is a different state from "collected long ago".
+- `/api/sources/?include_inactive=true` adds the paused sources; without it the
+  default is still active-only. The comparison is against the string `"true"` —
+  a query param always arrives as text, and `"false"` is a non-empty string, so
+  a plain truthiness check would read `?include_inactive=false` as a yes.
 - The trigger endpoint does a **synchronous** feed fetch inside the request, and
   sentiment is *not* ready when its 200 returns (Celery runs after).
 
@@ -241,10 +250,18 @@ and flips the flag in one `transaction.atomic()`), but deleting a
 `SentimentAnalysis` in the admin can.
 
 `get_sentiment_summary_by_source` still exists **untouched** next to the new
-`get_sentiment_summary`, because `mcp_server/server.py` calls it directly and
-handles its `{}` with its own message. No test covers that path, so changing its
-return shape would break the MCP server in silence. Selectors that something
-outside `apps/` imports get a sibling, not a new signature.
+`get_sentiment_summary`, and so does `get_active_sources` next to the new
+`get_sources`. Both originals are called directly by `mcp_server/server.py`, so
+changing their return shape or signature would break the MCP server. **Selectors
+that something outside `apps/` imports get a sibling, not a new signature** —
+this has now been the right call twice.
+
+The counts on `/api/sources/` are annotations (`post_count`, `pending_count`,
+`pos_count`, `neu_count`, `neg_count`), and every one carries `distinct=True`.
+They all travel the same join path (`source → posts → sentiment`); without it
+the row product inflates **all** of them at once, and the damage is silent —
+the numbers still look like numbers. Measured: 8 sources with 48 posts is 2
+queries (the paginator's COUNT and the page), flat as sources grow.
 
 **Pagination is applied by hand in each view.** `DEFAULT_PAGINATION_CLASS` in
 settings is read by the mixin the DRF *generics* use, and these views are plain
