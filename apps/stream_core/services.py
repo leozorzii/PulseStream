@@ -1,6 +1,7 @@
 from apps.stream_core.models import ContentSource, RawPost, SentimentAnalysis
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils import timezone
 
 def create_content_source(name,plataform, external_id):
     """Cria uma nova fonte de conteudo no banco de dados
@@ -37,6 +38,38 @@ def bulk_create_raw_posts(source, posts_data):
     for dados in posts_data:
         objects.append(RawPost(source=source, **dados)) #monta o objeto sem salvar
     return RawPost.objects.bulk_create(objects) # grava todos de uma vez so, se vierem 50 posts, salva todos
+
+
+def mark_source_collected(source):
+    """Marca a fonte como coletada agora.
+
+    COMO FUNCIONA
+    Grava timezone.now() em last_collected_at e salva SO esse campo. Uma linha
+    de escrita, sem regra nenhuma — a regra de QUANDO chamar mora em quem
+    orquestra a coleta.
+
+    POR QUE E UM SERVICE, E NAO UM source.save() DENTRO DO run_ingestion
+    O docstring do run_ingestion diz que ele nao persiste por conta propria, so
+    amarra os componentes que ja existem. Gravar direto la contradiria o
+    contrato que ele mesmo documenta, e a escrita ficaria longe do model que
+    ela toca. Aqui ela fica junto das outras escritas de stream_core.
+
+    POR QUE update_fields
+    Sem ele, o save() grava os SEIS campos do objeto em memoria. Se alguem
+    desativou a fonte pelo admin depois que a coleta comecou, o objeto que a
+    coleta carrega ainda tem is_active=True e a gravacao ressuscitaria a fonte
+    em silencio. Com update_fields o UPDATE toca uma coluna so, e o resto do
+    que estiver no banco fica como esta.
+
+    Args:
+        source (ContentSource): a fonte que acabou de ser coletada com sucesso
+
+    Returns:
+        ContentSource: a mesma instancia, ja com last_collected_at preenchido
+    """
+    source.last_collected_at = timezone.now()
+    source.save(update_fields=["last_collected_at"])
+    return source
 
 
 def save_sentiment_analysis(post, polarity_score, label, keywords):

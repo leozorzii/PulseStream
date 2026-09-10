@@ -3,6 +3,7 @@ from django.utils import timezone
 from apps.stream_core.services import create_content_source
 from apps.stream_core.services import  bulk_create_raw_posts
 from apps.stream_core.services import  save_sentiment_analysis
+from apps.stream_core.services import mark_source_collected
 from django.core.exceptions import ValidationError
 from apps.stream_core.models import ContentSource, RawPost, SentimentAnalysis
 
@@ -65,3 +66,39 @@ def test_save_sentiment_analysis_creates_and_mark_as_processed():
     post.refresh_from_db() # recarrega o db
     assert post.is_processed is True  # se o post ja foi marcado como processado
     assert SentimentAnalysis.objects.count() == 1  # analise foi criada  como feita
+
+#----------------------MARCACAO DE COLETA---------------------------
+
+@pytest.mark.django_db
+def test_mark_source_collected_grava_o_instante():
+    #Arrange(cenario) - fonte nunca coletada nasce com o campo nulo, que e o
+    #que distingue "nunca coletou" de "coletou faz tempo"
+    fonte = create_content_source(name="Canal", plataform="NEWS", external_id="UC_mark")
+    assert fonte.last_collected_at is None
+
+    #Act(executa)
+    antes = timezone.now()
+    mark_source_collected(fonte)
+
+    #assert(verifica se o resultado bateu)
+    fonte.refresh_from_db() #le do banco, nao confia no objeto em memoria
+    assert fonte.last_collected_at is not None
+    assert fonte.last_collected_at >= antes
+
+
+@pytest.mark.django_db
+def test_mark_source_collected_nao_pisa_nos_outros_campos():
+    #Arrange - alguem desativa a fonte pelo admin enquanto uma coleta corre.
+    #O objeto que a coleta carrega na memoria ainda tem is_active=True
+    fonte = create_content_source(name="Canal", plataform="NEWS", external_id="UC_mark2")
+    ContentSource.objects.filter(id=fonte.id).update(is_active=False)
+
+    #Act - marca usando o objeto DESATUALIZADO
+    mark_source_collected(fonte)
+
+    #assert - a desativacao sobrevive. Um save() cheio gravaria os 6 campos do
+    #objeto velho por cima e ressuscitaria a fonte em silencio; por isso o
+    #service salva com update_fields
+    fonte.refresh_from_db()
+    assert fonte.is_active is False
+    assert fonte.last_collected_at is not None

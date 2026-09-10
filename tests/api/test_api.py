@@ -1,6 +1,6 @@
 import pytest
 from rest_framework.test import APIClient
-from apps.stream_core.models import SentimentAnalysis, RawPost
+from apps.stream_core.models import SentimentAnalysis, RawPost, ContentSource
 from apps.stream_core.services import create_content_source
 from django.utils import timezone
 
@@ -223,3 +223,111 @@ def test_active_sources_desempata_por_id():
     #assert - o id menor vem primeiro, sempre
     ids = [fonte["id"] for fonte in response.data["results"]]
     assert ids == [primeira.id, segunda.id]
+
+
+#----------------------METADADOS DA FONTE---------------------------
+
+def _fonte(nome, external_id, feed_url=None, ativa=True, pendentes=0, labels=()):
+    """Cria uma fonte com posts pendentes e analisados.
+
+    Args:
+        nome (str): nome da fonte
+        external_id (str): identificador unico
+        feed_url (str | None): url do feed, ou None para fonte nao coletavel
+        ativa (bool): valor de is_active
+        pendentes (int): quantos posts sem processar criar
+        labels (tuple[str]): um post analisado por label
+
+    Returns:
+        ContentSource: a fonte criada
+    """
+    fonte = ContentSource.objects.create(
+        name=nome, plataform="NEWS", external_id=external_id,
+        feed_url=feed_url, is_active=ativa,
+    )
+    for i in range(pendentes):
+        RawPost.objects.create(
+            source=fonte, external_id=f"{external_id}_p{i}", text_content="x",
+            published_at=timezone.now(), is_processed=False,
+        )
+    for i, label in enumerate(labels):
+        post = RawPost.objects.create(
+            source=fonte, external_id=f"{external_id}_a{i}", text_content="x",
+            published_at=timezone.now(), is_processed=True,
+        )
+        SentimentAnalysis.objects.create(post=post, polarity_score=0.0, label=label)
+    return fonte
+
+
+@pytest.mark.django_db
+def test_sources_traz_feed_url_e_metadados_de_coleta():
+    #Arrange(cenario) - 1 pendente e 3 analisados (2 POS, 1 NEG)
+    fonte = _fonte(
+        "G1", "g1_meta", feed_url="https://g1.globo.com/rss/",
+        pendentes=1, labels=("POS", "POS", "NEG"),
+    )
+
+    #Act(executa)
+    client = APIClient()
+    response = client.get("/api/sources/")
+
+    #assert(verifica se o resultado bateu)
+    assert response.status_code == 200
+    dados = response.data["results"][0]
+    #feed_url presente e o que deixa a UI DESABILITAR "coletar" numa fonte sem
+    #feed, em vez de oferecer uma acao que so falha depois do clique
+    assert dados["feed_url"] == "https://g1.globo.com/rss/"
+    #nunca coletada ainda: nulo, e nao uma data qualquer
+    assert dados["last_collected_at"] is None
+    assert dados["post_count"] == 4
+    assert dados["pending_count"] == 1
+    assert dados["sentiment"] == {"POS": 66.66666666666666, "NEU": 0.0, "NEG": 33.33333333333333}
+    assert dados["id"] == fonte.id
+
+
+@pytest.mark.django_db
+def test_sources_diz_null_no_sentiment_quando_nao_ha_analise():
+    #Arrange - fonte coletada, worker ainda nao passou
+    _fonte("Coletando", "coletando", pendentes=2)
+
+    #Act
+    client = APIClient()
+    response = client.get("/api/sources/")
+
+    #assert - null, e NAO {POS: 0, NEU: 0, NEG: 0}: zerado leria como resultado
+    #calculado quando nada foi calculado. Mesma decisao ja tomada em
+    #/api/analytics/summary/ na issue #31 — as duas rotas concordam
+    assert response.data["results"][0]["sentiment"] is None
+
+
+@pytest.mark.django_db
+def test_sources_esconde_inativas_por_padrao():
+    #Arrange
+    _fonte("Ativa", "ativa_d")
+    _fonte("Pausada", "pausada_d", ativa=False)
+
+    #Act
+    client = APIClient()
+    response = client.get("/api/sources/")
+
+    #assert - o padrao nao muda o que a rota ja devolvia
+    assert response.data["count"] == 1
+    assert response.data["results"][0]["name"] == "Ativa"
+
+
+@pytest.mark.django_db
+def test_sources_inclui_inativas_com_o_query_param():
+    #Arrange
+    _fonte("Ativa", "ativa_q")
+    _fonte("Pausada", "pausada_q", ativa=False)
+
+    #Act
+    client = APIClient()
+    response = client.get("/api/sources/?include_inactive=true")
+
+    #assert - sem isto a fonte pausada e invisivel para a API inteira, e uma
+    #tela de gerenciamento nao teria como oferecer "reativar"
+    assert response.data["count"] == 2
+    nomes = [f["name"] for f in response.data["results"]]
+    assert nomes == ["Ativa", "Pausada"]
+    assert response.data["results"][1]["is_active"] is False

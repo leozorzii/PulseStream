@@ -11,6 +11,12 @@ class ContentSource(models.Model):
     feed_url = models.URLField(max_length=500, null=True, blank=True) #url do feed RSS, nem toda fonte tem
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True) #define automaticamente o valor de um campo de data ou hora para o momento exato em que um novo objeto é criado pela primeira vez
+    #quando a ingestao rodou com sucesso pela ultima vez. NULO significa "nunca
+    #coletada", que e um estado diferente de "coletada faz muito tempo" — a tela
+    #precisa separar os dois para dizer "colete para comecar" em vez de mostrar
+    #uma defasagem gigante. auto_now NAO serve aqui: ele gravaria em todo save()
+    #do model, entao editar o nome da fonte pelo admin fingiria uma coleta
+    last_collected_at = models.DateTimeField(null=True, blank=True)
     
     
     def __str__(self):

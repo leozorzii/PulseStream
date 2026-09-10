@@ -5,6 +5,7 @@ from apps.stream_core.selectors import get_active_sources
 from apps.stream_core.selectors import get_unprocessed_posts
 from apps.stream_core.selectors import get_sentiment_summary_by_source
 from apps.stream_core.selectors import get_sentiment_summary
+from apps.stream_core.selectors import get_sources
 from apps.stream_core.models import ContentSource, SentimentAnalysis, RawPost
 #CORRECAO: removido o import de bulk_create_raw_posts - ela virou service,
 #entao o teste dela foi para tests/stream_core/test_services.py
@@ -205,3 +206,97 @@ def test_get_sentiment_summary_geral_agrega_todas_as_fontes():
     assert res["total_analyzed"] == 2
     assert res["total_pending"] == 1
     assert res["sentiment"] == {"POS": 50.0, "NEU": 0.0, "NEG": 50.0}
+
+#----------------------LISTAGEM DE FONTES COM METADADOS---------------------------
+#get_sources e um selector NOVO, ao lado de get_active_sources, que continua
+#intocado: o mcp_server/server.py chama aquele direto e mudar a assinatura dele
+#quebraria o servidor MCP. Mesmo padrao do get_sentiment_summary.
+
+def _fonte_com_posts(nome, external_id, pendentes, labels, ativa=True):
+    """Cria uma fonte com posts pendentes e posts ja analisados.
+
+    Args:
+        nome (str): nome da fonte
+        external_id (str): identificador unico
+        pendentes (int): quantos posts sem processar criar
+        labels (list[str]): um post analisado por label da lista
+        ativa (bool): valor de is_active
+
+    Returns:
+        ContentSource: a fonte criada
+    """
+    fonte = ContentSource.objects.create(
+        name=nome, plataform="NEWS", external_id=external_id, is_active=ativa
+    )
+    for i in range(pendentes):
+        RawPost.objects.create(
+            source=fonte, external_id=f"{external_id}_pend_{i}", text_content="x",
+            published_at=timezone.now(), is_processed=False,
+        )
+    for i, label in enumerate(labels):
+        post = RawPost.objects.create(
+            source=fonte, external_id=f"{external_id}_an_{i}", text_content="x",
+            published_at=timezone.now(), is_processed=True,
+        )
+        SentimentAnalysis.objects.create(post=post, polarity_score=0.0, label=label)
+    return fonte
+
+
+@pytest.mark.django_db
+def test_get_sources_esconde_inativas_por_padrao():
+    #Arrange(cenario)
+    _fonte_com_posts("Ativa", "UC_src_a", pendentes=0, labels=[])
+    _fonte_com_posts("Inativa", "UC_src_i", pendentes=0, labels=[], ativa=False)
+
+    #Act(executa)
+    res = get_sources()
+
+    #assert(verifica se o resultado bateu) - o padrao continua sendo so ativas,
+    #para nao mudar o que /api/sources/ ja devolve hoje sem ninguem pedir
+    assert [f.name for f in res] == ["Ativa"]
+
+
+@pytest.mark.django_db
+def test_get_sources_inclui_inativas_quando_pedido():
+    #Arrange
+    _fonte_com_posts("Ativa", "UC_src_a2", pendentes=0, labels=[])
+    _fonte_com_posts("Inativa", "UC_src_i2", pendentes=0, labels=[], ativa=False)
+
+    #Act
+    res = get_sources(include_inactive=True)
+
+    #assert - sem isto uma tela de gerenciamento nao teria como oferecer
+    #"reativar": a fonte pausada e invisivel para a API inteira
+    assert [f.name for f in res] == ["Ativa", "Inativa"] #ordem alfabetica
+
+
+@pytest.mark.django_db
+def test_get_sources_conta_posts_e_pendentes_por_fonte():
+    #Arrange - 2 pendentes e 3 analisados = 5 posts
+    _fonte_com_posts("Canal", "UC_src_cont", pendentes=2, labels=["POS", "POS", "NEG"])
+
+    #Act
+    fonte = get_sources().first()
+
+    #assert - contagens por anotacao, numa consulta so. Uma requisicao por linha
+    #da tabela para descobrir isso e exatamente o que a issue #28 evita
+    assert fonte.post_count == 5
+    assert fonte.pending_count == 2
+
+
+@pytest.mark.django_db
+def test_get_sources_conta_os_labels_sem_multiplicar_no_join():
+    #Arrange - o risco aqui e silencioso: varias anotacoes Count sobre o mesmo
+    #caminho de join podem multiplicar linhas e inflar TODAS as contagens.
+    #Com 4 analises e 1 pendente os numeros so batem se o join estiver correto
+    _fonte_com_posts("Canal", "UC_src_join", pendentes=1, labels=["POS", "POS", "NEU", "NEG"])
+
+    #Act
+    fonte = get_sources().first()
+
+    #assert
+    assert fonte.post_count == 5
+    assert fonte.pending_count == 1
+    assert fonte.pos_count == 2
+    assert fonte.neu_count == 1
+    assert fonte.neg_count == 1
