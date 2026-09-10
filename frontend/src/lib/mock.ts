@@ -90,7 +90,12 @@ export type Fonte = {
   last_collected_at: string | null
   post_count: number
   pending_count: number
-  sentiment: Record<SentimentLabel, number>
+  /** null quando a fonte ainda não tem nenhuma análise. NÃO é zerado: zeros
+   *  leriam como resultado calculado quando nada foi calculado, e um gráfico
+   *  desenhado direto deles afirmaria que a opinião está dividida em três.
+   *  Mesma decisão de /api/analytics/summary/ (issue #31) — as duas rotas
+   *  concordam sobre o que "ainda não há o que resumir" significa. */
+  sentiment: Record<SentimentLabel, number> | null
 }
 
 export const MOCK_FONTES: Fonte[] = [
@@ -142,8 +147,10 @@ export const MOCK_FONTES: Fonte[] = [
     last_collected_at: null,
     post_count: 0,
     pending_count: 0,
-    // Fonte criada e nunca coletada: a API devolve {} nesse caso — issue #31.
-    sentiment: { POS: 0, NEU: 0, NEG: 0 },
+    // Fonte criada e nunca coletada. A API devolve sentiment: null aqui — não
+    // {} nem zerado. É o caso de borda que obriga todo consumidor a decidir o
+    // que mostrar quando não há o que resumir, em vez de desenhar 0% de tudo.
+    sentiment: null,
   },
   {
     id: 13,
