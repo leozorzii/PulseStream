@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from apps.stream_core.models import ContentSource
 from apps.api.serializers import ContentSourceSerializer, RawPostSerializer
 from apps.ingestion.adapters.rss import RSSAdapter
-from apps.stream_core.selectors import get_sources, get_unprocessed_posts, get_sentiment_summary
+from apps.stream_core.selectors import get_sources, get_unprocessed_posts, get_sentiment_summary, get_sentiment_timeseries
 from apps.ingestion.services import run_ingestion
 from rest_framework import status
 from apps.ingestion.exceptions import FeedFetchError
@@ -118,6 +118,63 @@ class SentimentSummaryView(APIView):
         resumo = get_sentiment_summary(source_id) #seletor
         return Response(resumo) #o dict vira JSON
     
+class SentimentTimeseriesView(APIView):
+    """Endpoint da serie temporal de sentimento (GET ?source_id &days opcionais)"""
+
+    def get(self, request):
+        """Retorna a contagem diaria por rotulo e a polaridade media de cada dia.
+
+        POR QUE ESTA ROTA NAO PAGINA
+        E a unica excecao a regra do envelope, e de proposito. A resposta e uma
+        JANELA DE TAMANHO FIXO que o proprio cliente pediu — `days`, com teto de
+        365 no selector — e nao uma colecao ilimitada como a fila de posts.
+        Paginada em 20, uma serie de 30 dias viraria duas paginas e o grafico
+        desenharia os 20 primeiros dias achando que sao 30: uma serie truncada,
+        sem erro nenhum, com a tendencia do fim do periodo simplesmente ausente.
+        O MOCK_TIMESERIES do front tambem e array cru.
+
+        VALIDACAO
+        Mesmos guards do summary, pelos mesmos motivos: `days` e `source_id`
+        entram no ORM, entao um valor nao numerico viraria ValueError e 500 com
+        corpo HTML, que o cliente le como falha de parse de JSON. E um
+        source_id inexistente e 404, porque uma serie de zeros faria um id
+        errado parecer uma fonte real e silenciosa.
+
+        Returns:
+            Response: 200 com a lista de pontos, 400 se days ou source_id forem
+                invalidos, ou 404 se a fonte nao existir
+        """
+        source_id = request.query_params.get("source_id")
+
+        if source_id is not None:
+            try:
+                source_id = int(source_id)
+            except ValueError:
+                return Response(
+                    {"erro": "source_id deve ser um numero inteiro"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not ContentSource.objects.filter(id=source_id).exists():
+                return Response(
+                    {"erro": "fonte nao encontrada"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        #o default de 30 vive aqui, na fronteira HTTP, e nao no selector: e uma
+        #escolha de produto (um mes de tendencia), nao regra de dominio
+        try:
+            days = int(request.query_params.get("days", 30))
+        except ValueError:
+            return Response(
+                {"erro": "days deve ser um numero inteiro"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serie = get_sentiment_timeseries(source_id=source_id, days=days)
+        return Response(serie)
+
+
 class TriggerIngestionView(APIView):
     """Endpoint que dispara a coleta de uma fonte (POST)"""
     def post(self, request):

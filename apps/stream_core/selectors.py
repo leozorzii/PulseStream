@@ -1,6 +1,9 @@
 from apps.stream_core.models import ContentSource,SentimentAnalysis, RawPost
 from collections import Counter #contador automatico
-from django.db.models import Count, Q
+from django.db.models import Avg, Count, Q
+from django.db.models.functions import TruncDate
+from django.utils import timezone
+from datetime import timedelta
 
 def get_active_sources():
     """Metodo que retorna todas as fontes ativas, em ordem estavel
@@ -90,6 +93,106 @@ def get_unprocessed_posts():
         QuerySet[ContentSource]: post com is_processed = false, ordenados por published_at
     """ 
     return RawPost.objects.filter(is_processed=False).order_by("published_at")
+
+
+#Teto da janela da serie temporal. NAO e preciosismo: os dias vazios sao
+#preenchidos com zero em Python, entao o tamanho da resposta e ditado pelo
+#PARAMETRO e nao pelo dado — ?days=1000000 geraria um milhao de linhas a partir
+#de um banco vazio. Um ano cobre qualquer leitura de tendencia deste painel.
+MAX_DIAS_SERIE = 365
+
+
+def get_sentiment_timeseries(source_id=None, days=30):
+    """Serie diaria de sentimento: contagem por rotulo e polaridade media do dia
+
+    COMO FUNCIONA
+    Trunca published_at para a data, agrupa por ela e conta cada rotulo numa
+    unica consulta agregada. O que volta do banco tem so os dias que existem;
+    o preenchimento dos dias vazios acontece depois, em Python, porque o ORM
+    nao inventa linha que nao esta na tabela.
+
+    Medido com 300 analises espalhadas por 90 dias: 1 consulta, tanto para
+    days=30 quanto para days=365. O agregado devolve no maximo uma linha por
+    dia COM dado, e o preenchimento e um laco sobre a janela.
+
+    CONTAGEM, E NAO PERCENTUAL
+    Percentual esconde volume: um dia com 2 posts e um com 200 leem igual em
+    "50% positivo". O cliente deriva o percentual a partir da contagem; nunca
+    o contrario.
+
+    AGRUPA POR published_at, NAO POR processed_at
+    Interessa quando a OPINIAO FOI EXPRESSA, nao quando o worker classificou.
+    processed_at e auto_now_add, entao um backlog de um mes drenado numa tarde
+    empilharia tudo num unico dia e inventaria um pico que nunca existiu.
+
+    O FUSO IMPORTA, E ERRA EM SILENCIO
+    USE_TZ=True e TIME_ZONE=America/Sao_Paulo: o ORM guarda e devolve em UTC.
+    Chamar .date() no datetime que volta jogaria todo post publicado depois das
+    21h local para o dia seguinte. TruncDate converte para TIME_ZONE antes de
+    truncar, que e o agrupamento que o usuario espera ver. Ha um teste com um
+    post as 23:30 fixas — com posts criados no meio do dia o erro passa verde.
+
+    DIA VAZIO TEM avg_polarity None, E NAO 0.0
+    Zero e uma polaridade VALIDA: quer dizer "a opiniao foi medida e deu
+    neutra". Um dia sem post nenhum nao mediu nada. Com 0.0 a linha do grafico
+    desceria ao centro em todo dia de silencio, desenhando uma queda de
+    sentimento que nunca aconteceu. As contagens, essas, sao 0 de verdade.
+
+    Args:
+        source_id (int | None): id da fonte. None agrega o banco inteiro
+        days (int): tamanho da janela em dias, terminando hoje. Limitado a
+            MAX_DIAS_SERIE, com minimo de 1
+
+    Returns:
+        list[dict]: um item por dia, do mais antigo ao mais recente, cada um
+            com {"date" (ISO), "POS", "NEU", "NEG", "avg_polarity"}
+    """
+    #limita ANTES de qualquer conta: e este numero que decide o tamanho da
+    #resposta, entao ele nao pode chegar do cliente sem teto
+    days = max(1, min(int(days), MAX_DIAS_SERIE))
+
+    fim = timezone.localdate()
+    inicio = fim - timedelta(days=days - 1)
+
+    analises = SentimentAnalysis.objects.all()
+    if source_id is not None:
+        analises = analises.filter(post__source_id=source_id)
+
+    #__date no filtro tambem respeita TIME_ZONE, entao a janela e recortada no
+    #mesmo fuso em que os dias sao agrupados. Se um usasse UTC e o outro local,
+    #as pontas da serie ficariam com um dia a mais ou a menos
+    linhas = (
+        analises.filter(
+            post__published_at__date__gte=inicio,
+            post__published_at__date__lte=fim,
+        )
+        .annotate(dia=TruncDate("post__published_at"))
+        .values("dia")
+        .annotate(
+            pos=Count("id", filter=Q(label="POS")),
+            neu=Count("id", filter=Q(label="NEU")),
+            neg=Count("id", filter=Q(label="NEG")),
+            media=Avg("polarity_score"),
+        )
+    )
+
+    #indexa o que veio do banco para o preenchimento nao virar O(dias x linhas)
+    por_dia = {linha["dia"]: linha for linha in linhas}
+
+    serie = []
+    for i in range(days):
+        dia = inicio + timedelta(days=i)
+        linha = por_dia.get(dia)
+        serie.append(
+            {
+                "date": dia.isoformat(),
+                "POS": linha["pos"] if linha else 0,
+                "NEU": linha["neu"] if linha else 0,
+                "NEG": linha["neg"] if linha else 0,
+                "avg_polarity": linha["media"] if linha else None,
+            }
+        )
+    return serie
 
 
 def get_sentiment_summary_by_source(source_id):
