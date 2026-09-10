@@ -17,7 +17,7 @@ tests/             pytest, mirrors the apps/ layout
 
 ```bash
 # backend (venv at ./venv)
-venv/Scripts/python.exe -m pytest          # 55 passed, 1 xfailed — fully offline
+venv/Scripts/python.exe -m pytest          # 59 passed, 1 xfailed — fully offline
 venv/Scripts/python.exe manage.py check
 
 # frontend (cd frontend)
@@ -288,6 +288,8 @@ fails at deploy.
 
 PR descriptions: what changed and **why**, the trade-offs, and anything measured.
 Flag what was deliberately left out. No "Generated with Claude Code" footer.
+
+always after merge PR, do **git checkout main** and **git pull origin main** Keep everything up to date with main.
 
 ---
 
