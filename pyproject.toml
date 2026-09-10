@@ -1,3 +1,14 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
 DJANGO_SETTINGS_MODULE = "config.settings"
+
+# asyncio_mode = "auto" faz o pytest-asyncio rodar qualquer `async def test_`
+# sem precisar de @pytest.mark.asyncio em cada uma. As tools do MCP sao async
+# por natureza (o protocolo e async), entao sem isso todo teste do servidor
+# viraria um marcador repetido — ou pior, silenciosamente pulado: sem o modo
+# auto e sem o marker, o pytest coleta a corotina, nao a executa e reporta
+# PASSOU. Teste async que nunca roda e a falha mais perigosa desta config.
+asyncio_mode = "auto"
+# fixa o escopo do event loop das fixtures; sem isso o pytest-asyncio 1.x
+# emite DeprecationWarning a cada execucao
+asyncio_default_fixture_loop_scope = "function"
