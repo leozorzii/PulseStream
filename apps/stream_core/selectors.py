@@ -1,5 +1,6 @@
 from apps.stream_core.models import ContentSource,SentimentAnalysis, RawPost
 from collections import Counter #contador automatico
+from django.db.models import Count, Q
 
 def get_active_sources():
     """Metodo que retorna todas as fontes ativas, em ordem estavel
@@ -17,6 +18,69 @@ def get_active_sources():
         QuerySet[ContentSource]: fontes com is_active=True, ordenadas por nome
     """
     return ContentSource.objects.filter(is_active=True).order_by("name", "id")
+
+
+def get_sources(include_inactive=False):
+    """Lista as fontes com os metadados que a tabela do painel precisa, em ordem estavel
+
+    COMO FUNCIONA
+    Monta o queryset de fontes e pendura CINCO anotacoes nele: o total de posts,
+    quantos estao pendentes, e a contagem de cada label de sentimento. As cinco
+    saem numa consulta so — o banco agrupa e conta, e o Python nunca ve os posts.
+    Medido: /api/sources/ com 8 fontes e 48 posts faz 2 consultas (o COUNT do
+    paginador e a pagina), e esse numero nao cresce com a quantidade de fontes.
+
+    POR QUE ANOTACAO, E NAO UMA CONTA POR LINHA
+    A tabela de fontes mostra essas contagens em toda linha. Buscar post a post,
+    ou chamar o resumo por fonte, seria uma requisicao por linha renderizada:
+    dez fontes viram onze idas ao banco para desenhar uma tabela. E o problema
+    que a issue #28 descreve.
+
+    POR QUE distinct=True EM TODAS
+    As cinco anotacoes andam pelo mesmo caminho de join (source -> posts ->
+    sentiment). Sem distinct, o produto entre as linhas do join infla TODAS as
+    contagens ao mesmo tempo, e o estrago e silencioso: os numeros continuam
+    parecendo numeros, so que errados, e sem teste ninguem percebe. Ha um teste
+    dedicado a isso, com quantidades diferentes em cada label justamente para
+    que a inflacao nao passe despercebida.
+
+    POR QUE UM SELECTOR NOVO, E NAO include_inactive NO get_active_sources
+    O mcp_server/server.py chama get_active_sources direto, e nenhum teste
+    cobria aquele caminho ate a #37. Mudar a assinatura de um selector que algo
+    fora de apps/ importa e como se quebra um consumidor em silencio. Mesmo
+    padrao ja usado entre get_sentiment_summary_by_source e get_sentiment_summary:
+    o novo nasce ao lado, o antigo nao muda.
+
+    A ordenacao repete a do get_active_sources porque a mesma regra vale: sem
+    order_by deterministico a paginacao pode repetir um item numa pagina e sumir
+    com ele na outra.
+
+    Args:
+        include_inactive (bool): False (padrao) lista so as fontes ativas, que
+            e o que /api/sources/ ja devolvia. True traz as pausadas junto, para
+            uma tela de gerenciamento poder oferecer "reativar" — sem isso a
+            fonte inativa e invisivel para a API inteira
+
+    Returns:
+        QuerySet[ContentSource]: fontes ordenadas por nome, cada uma com os
+            atributos post_count, pending_count, pos_count, neu_count e
+            neg_count anotados
+    """
+    fontes = ContentSource.objects.all()
+
+    if not include_inactive:
+        fontes = fontes.filter(is_active=True)
+
+    return fontes.annotate(
+        post_count=Count("posts", distinct=True),
+        pending_count=Count("posts", filter=Q(posts__is_processed=False), distinct=True),
+        #os tres labels contados a parte, e nao um percentual pronto: o serializer
+        #e que decide o formato, e contagem crua e o que permite dizer "nenhuma
+        #analise ainda" em vez de fabricar 0% de cada coisa
+        pos_count=Count("posts__sentiment", filter=Q(posts__sentiment__label="POS"), distinct=True),
+        neu_count=Count("posts__sentiment", filter=Q(posts__sentiment__label="NEU"), distinct=True),
+        neg_count=Count("posts__sentiment", filter=Q(posts__sentiment__label="NEG"), distinct=True),
+    ).order_by("name", "id")
 
 
 def get_unprocessed_posts():

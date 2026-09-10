@@ -3,18 +3,35 @@ from rest_framework.response import Response
 from apps.stream_core.models import ContentSource
 from apps.api.serializers import ContentSourceSerializer, RawPostSerializer
 from apps.ingestion.adapters.rss import RSSAdapter
-from apps.stream_core.selectors import get_active_sources, get_unprocessed_posts, get_sentiment_summary
+from apps.stream_core.selectors import get_sources, get_unprocessed_posts, get_sentiment_summary
 from apps.ingestion.services import run_ingestion
 from rest_framework import status
 from apps.ingestion.exceptions import FeedFetchError
 from apps.ingestion.tasks import processar_sentimentos
 from apps.api.pagination import StandardPagination
-class ActiveSourceListView(APIView):
-    """Endpoint que lista as fontes de conteudo ativas (GET)."""
+class SourceListView(APIView):
+    """Endpoint que lista as fontes de conteudo (GET ?include_inactive opcional)."""
     #responde a requisicoes GET
     def get(self, request):
-        """Retorna a lista de fontes de conteúdo ativas, paginada."""
-        fontes = get_active_sources() #chama o seletor
+        """Retorna a lista de fontes com seus metadados, paginada.
+
+        include_inactive=true traz tambem as fontes pausadas. Sem o parametro o
+        padrao continua sendo so as ativas, para nao mudar o que esta rota ja
+        devolvia para quem a consome hoje.
+
+        A comparacao e com a string "true" e nao com o valor cru: query param
+        chega SEMPRE como texto, e "false" e uma string nao vazia — um
+        `if request.query_params.get("include_inactive")` trataria
+        ?include_inactive=false como pedido para incluir, que e o oposto do que
+        quem escreveu a URL quis.
+
+        Returns:
+            Response: envelope paginado do DRF com as fontes serializadas
+        """
+        #.lower() para aceitar True/TRUE/true — o cliente que monta a URL nao
+        #deveria precisar adivinhar a caixa
+        incluir_inativas = request.query_params.get("include_inactive", "").lower() == "true"
+        fontes = get_sources(include_inactive=incluir_inativas) #chama o seletor
 
         # Paginacao aplicada A MAO. APIView nao pagina sozinha: quem le
         # DEFAULT_PAGINATION_CLASS e o mixin dos generics do DRF (ListAPIView e
