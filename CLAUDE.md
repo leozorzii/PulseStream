@@ -17,7 +17,7 @@ tests/             pytest, mirrors the apps/ layout
 
 ```bash
 # backend (venv at ./venv)
-venv/Scripts/python.exe -m pytest          # 72 passed, 1 xfailed — fully offline
+venv/Scripts/python.exe -m pytest          # 79 passed, 1 xfailed — fully offline
 venv/Scripts/python.exe manage.py check
 
 # frontend (cd frontend)
@@ -220,6 +220,10 @@ these:
   three** labels when it is — a label with zero occurrences is `0.0`, not
   absent. Percentages are raw floats (`66.66666666666666`) and can sum to
   `99.99999999999999`.
+- The same response carries `avg_polarity` and `histogram` (ten counts over
+  [-1, +1]), both `null` outside `"ready"` for the same reason: an average of
+  `0.0` would read as "perfectly neutral opinion" about data that does not
+  exist.
 - List endpoints answer with the DRF envelope — `{count, next, previous,
   results}` — not a bare array. Page size is 20.
 - `/api/sources/` carries `feed_url`, `last_collected_at`, `post_count`,
@@ -262,6 +266,28 @@ They all travel the same join path (`source → posts → sentiment`); without i
 the row product inflates **all** of them at once, and the damage is silent —
 the numbers still look like numbers. Measured: 8 sources with 48 posts is 2
 queries (the paginator's COUNT and the page), flat as sources grow.
+
+**Zero is a bucket EDGE in the polarity histogram, and it is where all the NEU
+mass lives.** The classifier labels by comparing counts, with no dead band:
+a tie produces `polarity_score` exactly `0.0`, and so does text with no charged
+word. With ten buckets over [-1, +1] zero is never interior — it is the border
+between bucket 4 and bucket 5. Ranges are `[start, end)`, so it lands in
+**bucket 5**, the first one right of the divider, which is where the frontend's
+`PolarityHistogram` draws its "neutro (0,0)" line. Putting it in bucket 4 would
+place the chart's largest bar on the wrong side of the divider and assert
+negative opinion. The last bucket is the only one closed on the right, or a
+score of exactly `+1.0` would fall outside every range and vanish.
+
+Bucket edges are computed as `-1 + i * (2/10)` on **both** sides. That is not
+style: `2/10` has no exact binary representation, so edge 3 is
+`-0.3999999999999999`, not `-0.4`. Writing `-0.4` by hand on one side would
+shift the boundary and an analysis sitting on it would land in one bucket in
+the backend and another in the chart.
+
+Expect **spikes, not a curve**: `polarity_score` is `(pos - neg) / (pos + neg)`
+with small integer counts, so real values are almost always
+`{-1, -0.5, -0.33, 0, 0.33, 0.5, 1}`, with a large spike at zero. That is the
+analyser, not the endpoint — #15 is what improves it.
 
 **Pagination is applied by hand in each view.** `DEFAULT_PAGINATION_CLASS` in
 settings is read by the mixin the DRF *generics* use, and these views are plain
