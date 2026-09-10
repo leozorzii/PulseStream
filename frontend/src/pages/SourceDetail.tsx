@@ -35,10 +35,20 @@ export default function SourceDetail() {
   const { percentuais, polaridadeMedia, total } = agregarPeriodo(serie)
 
   const posts = MOCK_POSTS.filter((p) => p.source.id === fonte.id)
-  const fatias: SentimentSlice[] = SENTIMENT_ORDER.map((tone) => ({
-    tone,
-    value: fonte.sentiment[tone],
-  })).filter((f) => f.value > 0)
+  // sentiment é null enquanto não houver análise; sem fatias o card cai no
+  // estado vazio dele em vez de desenhar três fatias de 0%.
+  //
+  // A cópia para uma const local não é estilo: o TypeScript não mantém o
+  // estreitamento de `fonte.sentiment` dentro do callback do map — ele não
+  // pode provar que a propriedade não mudou no meio — então sem ela o acesso
+  // exigiria um `!`, que desliga a checagem justamente onde ela importa.
+  const distribuicao = fonte.sentiment
+  const fatias: SentimentSlice[] = distribuicao
+    ? SENTIMENT_ORDER.map((tone) => ({
+        tone,
+        value: distribuicao[tone],
+      })).filter((f) => f.value > 0)
+    : []
 
   const podeColetar = Boolean(fonte.feed_url) && fonte.is_active
   const motivoBloqueio = !fonte.is_active
@@ -47,8 +57,8 @@ export default function SourceDetail() {
       ? "Sem feed_url configurada — não é coletável por RSS"
       : undefined
 
-  // Fonte criada e nunca coletada: a API devolve {} nesse caso (issue #31), e
-  // é estado real, não defensiva.
+  // Fonte criada e nunca coletada: a API responde state "empty" e
+  // sentiment null (issue #31). É estado real, não defensiva.
   const semDados = fonte.post_count === 0
 
   return (

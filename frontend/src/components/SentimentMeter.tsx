@@ -18,13 +18,21 @@ export function SentimentMeter({
   segmentos = 10,
   className,
 }: {
-  distribuicao: Record<SentimentLabel, number>
+  /** null = a fonte ainda não tem análise nenhuma. Cai no mesmo estado vazio
+   *  do total zero, de propósito: para quem olha a tabela, "nada analisado" e
+   *  "analisado e deu zero em tudo" se parecem, e a diferença entre os dois já
+   *  é dita pelas contagens ao lado do medidor. */
+  distribuicao: Record<SentimentLabel, number> | null
   segmentos?: number
   className?: string
 }) {
-  const total = SENTIMENT_ORDER.reduce((acc, t) => acc + (distribuicao[t] ?? 0), 0)
+  //o ?? 0 no reduce cobre chave faltando; o null precisa ser barrado ANTES,
+  //porque indexar null estoura em tempo de execução
+  const total = distribuicao
+    ? SENTIMENT_ORDER.reduce((acc, t) => acc + (distribuicao[t] ?? 0), 0)
+    : 0
 
-  if (total === 0) {
+  if (!distribuicao || total === 0) {
     return (
       <div className={cn("flex items-center gap-1", className)} aria-label="Sem análises">
         {Array.from({ length: segmentos }).map((_, i) => (
