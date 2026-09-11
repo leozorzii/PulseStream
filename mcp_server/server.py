@@ -1,3 +1,4 @@
+import json
 import os
 import django
 import sys
@@ -14,7 +15,33 @@ django.setup()#inicializa o Django
 
 #agora com django de pe, importa o que toca o ORM
 from mcp.server.fastmcp import FastMCP
+from mcp.types import CallToolResult, TextContent
+from apps.stream_core.models import ContentSource
 from apps.stream_core.selectors import get_active_sources, get_sentiment_summary_by_source
+
+
+def _erro_de_tool(payload):
+    """Monta uma resposta de erro de tool a partir de um dicionario.
+
+    Devolver CallToolResult e o unico jeito de ter isError=True COM um corpo
+    JSON proprio: levantar excecao tambem marca isError, mas o texto vira
+    "Error executing tool ...: <msg>" e deixa de ser desserializavel. O
+    lowlevel server repassa um CallToolResult inteiro sem tocar, e o
+    convert_result do FastMCP tem um ramo explicito para ele.
+
+    isError e o que importa aqui, nao a chave "erro": um campo chamado erro
+    dentro de uma resposta bem-sucedida e algo que o modelo narra como dado;
+    um erro de tool e sinal que ele precisa tratar.
+
+    Args:
+        payload (dict): o corpo a serializar
+
+    Returns:
+        CallToolResult: resultado marcado como erro
+    """
+    #ensure_ascii=False porque as mensagens sao em portugues e o cliente le UTF-8
+    texto = json.dumps(payload, ensure_ascii=False, indent=2)
+    return CallToolResult(content=[TextContent(type="text", text=texto)], isError=True)
 
 
 #cria a instancia do servidor MCP
@@ -56,7 +83,18 @@ async def resumo_sentimento_fonte(source_id: int) -> dict:
     Returns:
         Um resumo com os percentuais por sentimento (já com o nome legível),
         ou uma mensagem indicando que a fonte ainda não tem posts analisados.
+        Fonte inexistente vira erro de tool, nao resposta.
     """
+    #existencia e uma pergunta que o selector nao responde: ele filtra e conta,
+    #e zero linhas e o que um id inexistente e uma fonte sem analises produzem
+    #igualmente. Sem esta consulta a tool escolhe a leitura mais simpatica e
+    #afirma que a fonte existe. Mesmo corte da view da API, que checa existencia
+    #antes de chamar o selector, e mesmo texto de erro, para as duas portas do
+    #dominio nao discordarem sobre o que e "fonte desconhecida".
+    existe = await sync_to_async(ContentSource.objects.filter(id=source_id).exists)()
+    if not existe:
+        return _erro_de_tool({"source_id": source_id, "erro": "fonte nao encontrada"})
+
     resumo = await sync_to_async(get_sentiment_summary_by_source)(source_id)
     #selector devolve {} quando nao tem analises, o que torna ambiguo para a IA
     #entao deixo o estado explicito

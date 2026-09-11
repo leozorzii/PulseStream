@@ -184,3 +184,21 @@ async def test_resumo_de_fonte_sem_analises_traz_mensagem_explicita():
     assert corpo["source_id"] == fonte.id
     assert corpo["resumo"] == {}
     assert resultado.isError is False #ausencia de dado nao e falha da tool
+
+
+#----------------------FONTE INEXISTENTE---------------------------
+
+@pytest.mark.django_db(transaction=True)
+async def test_resumo_de_fonte_inexistente_e_erro_e_nao_vazio():
+    #Act(executa) - id que nao existe no banco
+    async with create_connected_server_and_client_session(mcp) as session:
+        resultado = await session.call_tool("resumo_sentimento_fonte", {"source_id": 99999})
+
+    #assert - isError True e o que separa "deu problema" de "nao tem dado".
+    #Sem isso o modelo le "Fonte ainda nao possui posts analisados", acredita,
+    #e reporta ao usuario que a fonte existe mas esta ociosa — uma mentira
+    #confiante que ninguem do outro lado consegue verificar
+    corpo = _payload(resultado)
+    assert resultado.isError is True
+    assert "erro" in corpo
+    assert corpo["source_id"] == 99999
