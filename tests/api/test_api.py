@@ -331,3 +331,47 @@ def test_sources_inclui_inativas_com_o_query_param():
     nomes = [f["name"] for f in response.data["results"]]
     assert nomes == ["Ativa", "Pausada"]
     assert response.data["results"][1]["is_active"] is False
+
+
+#----------------------POLARIDADE NO ENDPOINT---------------------------
+
+@pytest.mark.django_db
+def test_summary_expoe_media_e_histograma_de_polaridade():
+    #Arrange(cenario) - scores nas duas pontas e no centro. Media zero, e uma
+    #analise em cada extremo do dominio
+    fonte = create_content_source(name="Canal", plataform="NEWS", external_id="UC_api_pol")
+    for i, score in enumerate([-1.0, 0.0, 1.0]):
+        post = RawPost.objects.create(
+            source=fonte, external_id=f"api_pol_{i}", text_content="x",
+            published_at=timezone.now(), is_processed=True,
+        )
+        SentimentAnalysis.objects.create(post=post, polarity_score=score, label="NEU")
+
+    #Act(executa)
+    client = APIClient()
+    response = client.get(f"/api/analytics/summary/?source_id={fonte.id}")
+
+    #assert(verifica se o resultado bateu)
+    assert response.status_code == 200
+    assert response.data["avg_polarity"] == 0.0
+    #o histograma e o que separa "opiniao polarizada" de "opiniao morna": estes
+    #tres scores dao a mesma media que tres zeros dariam, e so a distribuicao
+    #mostra que a massa esta nas pontas
+    assert response.data["histogram"] == [1, 0, 0, 0, 0, 1, 0, 0, 0, 1]
+
+
+@pytest.mark.django_db
+def test_summary_sem_analise_nao_inventa_polaridade():
+    #Arrange - fonte sem post nenhum
+    fonte = create_content_source(name="Vazia", plataform="NEWS", external_id="UC_api_pol_v")
+
+    #Act
+    client = APIClient()
+    response = client.get(f"/api/analytics/summary/?source_id={fonte.id}")
+
+    #assert - None nos tres, pela mesma razao: media 0.0 leria como "opiniao
+    #perfeitamente neutra" e dez zeros como "distribuicao medida e vazia"
+    assert response.data["state"] == "empty"
+    assert response.data["sentiment"] is None
+    assert response.data["avg_polarity"] is None
+    assert response.data["histogram"] is None
