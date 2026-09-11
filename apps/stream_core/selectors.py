@@ -219,6 +219,32 @@ def get_sentiment_summary_by_source(source_id):
     return res
 
 
+#Dez baldes FIXOS sobre [-1, +1]. Fixo, e nao calculado a partir dos dados,
+#porque e o que mantem o eixo x estavel quando o usuario troca de fonte: com
+#baldes variaveis, duas fontes viram dois graficos que nao dao para comparar.
+BALDES_POLARIDADE = 10
+
+#As bordas usam EXATAMENTE a mesma expressao do PolarityHistogram do front
+#(-1 + i * 2/BALDES). Isso nao e coincidencia nem estilo: 2/10 nao tem
+#representacao binaria exata, entao a borda 3 e -0.3999999999999999 e nao -0.4.
+#Calcular do mesmo jeito nos dois lados faz os limites baterem bit a bit; usar
+#-0.4 escrito a mao aqui deslocaria a fronteira e uma analise em cima dela
+#cairia num balde no backend e noutro na leitura do grafico.
+LARGURA_BALDE = 2 / BALDES_POLARIDADE
+
+
+def _bordas_dos_baldes():
+    """Devolve os pares (inicio, fim) dos dez baldes de polaridade.
+
+    Returns:
+        list[tuple[float, float]]: as faixas, do balde 0 ao 9
+    """
+    return [
+        (-1 + i * LARGURA_BALDE, -1 + (i + 1) * LARGURA_BALDE)
+        for i in range(BALDES_POLARIDADE)
+    ]
+
+
 def get_sentiment_summary(source_id=None):
     """Retorna o resumo de sentimento com o ESTADO explicito, de uma fonte ou do banco inteiro
 
@@ -227,8 +253,13 @@ def get_sentiment_summary(source_id=None):
     filtra os dois por ela. O resto e derivado desses dois: total_analyzed e a
     contagem das analises, total_pending e a dos posts com is_processed=False,
     e os percentuais saem de um Counter sobre os labels. Nenhuma consulta e
-    disparada ate a primeira contagem, porque queryset e preguicoso; sao 3
-    consultas no caminho comum (contar analises, contar pendentes, ler labels).
+    disparada ate a primeira contagem, porque queryset e preguicoso.
+
+    Medido com 200 analises: 4 consultas em "ready" — contar analises, contar
+    pendentes, ler os labels, e uma agregada que traz media e os dez baldes de
+    uma vez. Fora de "ready" sao 2 ou 3, porque nada de polaridade e calculado.
+    O numero nao cresce com o tamanho da tabela: o agregado devolve sempre uma
+    linha com 11 numeros, tanto para 200 analises quanto para 200 mil.
 
     POR QUE ELE EXISTE EM VEZ DE GENERALIZAR get_sentiment_summary_by_source
     Aquele selector e chamado direto pelo mcp_server/server.py, que trata o {}
@@ -270,14 +301,40 @@ def get_sentiment_summary(source_id=None):
     distingue "nao existe" (404) de "existe e esta vazia" (200) e a view, porque
     isso e semantica de HTTP e nao do dominio.
 
+    O QUE O HISTOGRAMA RESPONDE, E OS TRES PERCENTUAIS NAO
+    "50% neutro" sai igual para opiniao MORNA (scores em torno de zero) e para
+    opiniao POLARIZADA (metade perto de +1, metade perto de -1). Sao situacoes
+    opostas para quem monitora uma marca. A distribuicao separa as duas.
+
+    O ZERO E BORDA DE BALDE, E E ONDE MORA TODO O NEU
+    O classificador rotula comparando contagens, sem banda morta: empate produz
+    polarity_score 0.0 EXATO, e texto sem palavra carregada tambem. Com dez
+    baldes sobre [-1,+1] o zero nao e interior de balde nenhum — e a fronteira
+    entre o 4 e o 5. As faixas sao [inicio, fim), entao ele cai no balde 5, o
+    primeiro a direita do divisor, que e onde o PolarityHistogram do front
+    desenha a linha "neutro (0,0)". Jogar para o balde 4 poria a maior barra do
+    grafico do lado errado do divisor, afirmando opiniao negativa.
+
+    O ultimo balde e o unico fechado a direita, senao um score de +1.0 nao
+    cairia em faixa nenhuma e sumiria da contagem.
+
+    O QUE ESPERAR DO FORMATO DA DISTRIBUICAO
+    polarity_score e (pos - neg) / (pos + neg) com contagens inteiras pequenas:
+    em texto real o denominador raramente passa de 2 ou 3, entao os valores
+    possiveis sao quase so {-1, -0.5, -0.33, 0, 0.33, 0.5, 1}. O histograma sai
+    em picos, nao em curva, com um pico grande em zero. Isso e o analisador,
+    nao defeito daqui — melhora quando a issue #15 expandir as listas.
+
     Args:
         source_id (int | None): id da fonte a resumir. None resume o banco
             inteiro, que e o escopo do painel geral
 
     Returns:
         dict: {"source_id", "state", "total_analyzed", "total_pending",
-            "sentiment"}, onde state e "ready" | "processing" | "empty" e
-            sentiment e o dict de percentuais por label ou None fora de "ready"
+            "sentiment", "avg_polarity", "histogram"}, onde state e
+            "ready" | "processing" | "empty". sentiment, avg_polarity e
+            histogram sao None fora de "ready"; histogram e uma lista de dez
+            contagens sobre [-1, +1]
     """
     analises = SentimentAnalysis.objects.all()
     posts = RawPost.objects.all()
@@ -300,6 +357,8 @@ def get_sentiment_summary(source_id=None):
         state = "empty"
 
     sentiment = None
+    avg_polarity = None
+    histogram = None
     if state == "ready":
         #values_list em vez de iterar as instancias: so o label vem do banco,
         #sem construir um objeto SentimentAnalysis por linha para ler um campo
@@ -309,11 +368,40 @@ def get_sentiment_summary(source_id=None):
             for label, _ in SentimentAnalysis.SENTIMENTOS
         }
 
+        #media e os dez baldes numa UNICA consulta agregada. A alternativa —
+        #trazer todos os polarity_score para o Python e contar aqui — carregaria
+        #uma linha por analise so para jogar quase tudo fora; com o backlog
+        #crescendo, o custo cresce junto. Aqui volta sempre a mesma linha, com
+        #11 numeros, independente do tamanho da tabela.
+        bordas = _bordas_dos_baldes()
+        agregados = {"media": Avg("polarity_score")}
+        for i, (inicio, fim) in enumerate(bordas):
+            #o ULTIMO balde fecha a direita (lte); os outros ficam abertos (lt).
+            #Com [inicio, fim) em todos, um score de exatamente +1.0 nao cairia
+            #em balde nenhum e sumiria da contagem — e +1.0 e valor que o
+            #classificador produz de verdade, em texto com carga de um sinal so.
+            ultimo = i == BALDES_POLARIDADE - 1
+            faixa = (
+                Q(polarity_score__gte=inicio, polarity_score__lte=fim)
+                if ultimo
+                else Q(polarity_score__gte=inicio, polarity_score__lt=fim)
+            )
+            agregados[f"balde_{i}"] = Count("id", filter=faixa)
+
+        resultado = analises.aggregate(**agregados)
+        avg_polarity = resultado["media"]
+        histogram = [resultado[f"balde_{i}"] for i in range(BALDES_POLARIDADE)]
+
     return {
         "source_id": source_id,
         "state": state,
         "total_analyzed": total_analyzed,
         "total_pending": total_pending,
         "sentiment": sentiment,
+        #media e distribuicao seguem a mesma regra do sentiment: None fora de
+        #"ready". Um avg_polarity 0.0 sem analise nenhuma leria como "opiniao
+        #perfeitamente neutra", que e uma afirmacao sobre dado que nao existe
+        "avg_polarity": avg_polarity,
+        "histogram": histogram,
     }
     

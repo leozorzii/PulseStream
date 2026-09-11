@@ -304,6 +304,113 @@ def test_get_sources_conta_os_labels_sem_multiplicar_no_join():
     assert fonte.neg_count == 1
 
 
+#----------------------DISTRIBUICAO DE POLARIDADE---------------------------
+
+def _com_scores(external_id, scores):
+    """Cria uma fonte com uma analise por score informado.
+
+    Args:
+        external_id (str): identificador unico da fonte
+        scores (list[float]): um polarity_score por analise a criar
+
+    Returns:
+        ContentSource: a fonte criada
+    """
+    fonte = ContentSource.objects.create(
+        name=f"Fonte {external_id}", plataform="NEWS", external_id=external_id
+    )
+    for i, score in enumerate(scores):
+        post = RawPost.objects.create(
+            source=fonte, external_id=f"{external_id}_p{i}", text_content="x",
+            published_at=timezone.now(), is_processed=True,
+        )
+        #o label nao importa para o histograma, que le so o score
+        SentimentAnalysis.objects.create(post=post, polarity_score=score, label="NEU")
+    return fonte
+
+
+@pytest.mark.django_db
+def test_summary_traz_media_de_polaridade():
+    #Arrange(cenario) - media de 1.0, -1.0 e 0.0 e zero
+    fonte = _com_scores("UC_avg", [1.0, -1.0, 0.0])
+
+    #Act(executa)
+    res = get_sentiment_summary(fonte.id)
+
+    #assert(verifica se o resultado bateu)
+    assert res["avg_polarity"] == 0.0
+
+
+@pytest.mark.django_db
+def test_histograma_tem_dez_baldes_que_somam_o_total():
+    #Arrange
+    fonte = _com_scores("UC_hist", [-1.0, -0.5, 0.0, 0.5, 1.0])
+
+    #Act
+    res = get_sentiment_summary(fonte.id)
+
+    #assert - dez baldes FIXOS mantem o eixo x estavel entre fontes e deixam o
+    #cliente burro; e a soma tem que fechar com o total, senao alguma analise
+    #caiu fora de todo balde
+    assert len(res["histogram"]) == 10
+    assert sum(res["histogram"]) == res["total_analyzed"] == 5
+
+
+@pytest.mark.django_db
+def test_histograma_poe_o_zero_no_balde_5():
+    #Arrange - so scores exatamente zero. Este e O teste do contrato: o
+    #classificador produz 0.0 EXATO em todo empate e em todo texto sem palavra
+    #carregada, entao a maior massa do histograma real mora nesta borda
+    fonte = _com_scores("UC_zero", [0.0, 0.0, 0.0])
+
+    #Act
+    res = get_sentiment_summary(fonte.id)
+
+    #assert - com 10 baldes sobre [-1,+1] o zero nao e interior de balde nenhum:
+    #e a BORDA entre o 4 e o 5. O intervalo e [inicio, fim), entao ele cai no 5,
+    #o primeiro a direita do divisor — que e onde o PolarityHistogram do front
+    #desenha a linha tracejada "neutro (0,0)". Se cair no 4, a barra aparece do
+    #lado errado do divisor e o grafico afirma que a opiniao e negativa
+    assert res["histogram"] == [0, 0, 0, 0, 0, 3, 0, 0, 0, 0]
+
+
+@pytest.mark.django_db
+def test_histograma_acomoda_os_dois_extremos():
+    #Arrange - -1.0 e +1.0 sao valores que o classificador produz de verdade
+    #(texto com carga so de um sinal), nao casos hipoteticos
+    fonte = _com_scores("UC_ext", [-1.0, 1.0])
+
+    #Act
+    res = get_sentiment_summary(fonte.id)
+
+    #assert - o -1.0 abre o primeiro balde e o +1.0 fecha o ultimo. O ultimo e
+    #fechado a direita de proposito: com [inicio, fim) em todos, o +1.0 cairia
+    #fora da faixa e sumiria da contagem
+    assert res["histogram"][0] == 1
+    assert res["histogram"][9] == 1
+    assert sum(res["histogram"]) == 2
+
+
+@pytest.mark.django_db
+def test_polaridade_e_none_quando_nao_ha_analise():
+    #Arrange - fonte com post pendente, nada analisado
+    fonte = ContentSource.objects.create(name="Pend", plataform="NEWS", external_id="UC_pol_none")
+    RawPost.objects.create(
+        source=fonte, external_id="pol_none_0", text_content="x",
+        published_at=timezone.now(), is_processed=False,
+    )
+
+    #Act
+    res = get_sentiment_summary(fonte.id)
+
+    #assert - mesma regra do sentiment: None diz "nao se aplica". Um
+    #avg_polarity 0.0 aqui leria como "opiniao perfeitamente neutra", que e uma
+    #afirmacao sobre dado que nao existe
+    assert res["state"] == "processing"
+    assert res["avg_polarity"] is None
+    assert res["histogram"] is None
+
+
 #----------------------SERIE TEMPORAL---------------------------
 
 def _analise_em(fonte, external_id, quando, label="POS", score=1.0):
