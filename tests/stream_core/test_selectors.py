@@ -6,6 +6,8 @@ from apps.stream_core.selectors import get_unprocessed_posts
 from apps.stream_core.selectors import get_sentiment_summary_by_source
 from apps.stream_core.selectors import get_sentiment_summary
 from apps.stream_core.selectors import get_sources
+from apps.stream_core.selectors import get_sentiment_timeseries
+from datetime import timedelta, datetime, time as dt_time
 from apps.stream_core.models import ContentSource, SentimentAnalysis, RawPost
 #CORRECAO: removido o import de bulk_create_raw_posts - ela virou service,
 #entao o teste dela foi para tests/stream_core/test_services.py
@@ -407,3 +409,152 @@ def test_polaridade_e_none_quando_nao_ha_analise():
     assert res["state"] == "processing"
     assert res["avg_polarity"] is None
     assert res["histogram"] is None
+
+
+#----------------------SERIE TEMPORAL---------------------------
+
+def _analise_em(fonte, external_id, quando, label="POS", score=1.0):
+    """Cria um post publicado em `quando`, ja analisado.
+
+    Args:
+        fonte (ContentSource): dona do post
+        external_id (str): identificador unico do post
+        quando (datetime): published_at, aware
+        label (str): rotulo da analise
+        score (float): polarity_score da analise
+
+    Returns:
+        SentimentAnalysis: a analise criada
+    """
+    post = RawPost.objects.create(
+        source=fonte, external_id=external_id, text_content="x",
+        published_at=quando, is_processed=True,
+    )
+    return SentimentAnalysis.objects.create(post=post, polarity_score=score, label=label)
+
+
+@pytest.mark.django_db
+def test_timeseries_conta_por_dia_e_nao_percentual():
+    #Arrange(cenario) - 2 POS e 1 NEG no mesmo dia
+    fonte = ContentSource.objects.create(name="F", plataform="NEWS", external_id="UC_ts_1")
+    hoje = timezone.localtime()
+    for i, label in enumerate(["POS", "POS", "NEG"]):
+        _analise_em(fonte, f"ts1_{i}", hoje, label=label)
+
+    #Act(executa)
+    serie = get_sentiment_timeseries(fonte.id, days=1)
+
+    #assert(verifica se o resultado bateu) - CONTAGEM, nao percentual: um dia
+    #com 2 posts e um com 200 leriam igual em "50% positivo", e o cliente
+    #consegue derivar o percentual mas nunca a contagem
+    assert len(serie) == 1
+    assert serie[0]["POS"] == 2
+    assert serie[0]["NEG"] == 1
+    assert serie[0]["NEU"] == 0
+
+
+@pytest.mark.django_db
+def test_timeseries_agrupa_por_published_at_e_nao_processed_at():
+    #Arrange - post PUBLICADO ha 3 dias, analisado agora (worker drenando
+    #backlog). processed_at e sempre "agora" porque o campo e auto_now_add
+    fonte = ContentSource.objects.create(name="F", plataform="NEWS", external_id="UC_ts_2")
+    tres_dias_atras = timezone.localtime() - timedelta(days=3)
+    _analise_em(fonte, "ts2_0", tres_dias_atras)
+
+    #Act
+    serie = get_sentiment_timeseries(fonte.id, days=5)
+
+    #assert - interessa QUANDO A OPINIAO FOI EXPRESSA, nao quando o worker
+    #classificou. Agrupar por processed_at empilharia um mes de backlog drenado
+    #numa tarde num unico dia, inventando um pico que nunca existiu
+    por_dia = {p["date"]: p for p in serie}
+    dia_publicacao = tres_dias_atras.date().isoformat()
+    assert por_dia[dia_publicacao]["POS"] == 1
+    assert por_dia[timezone.localdate().isoformat()]["POS"] == 0
+
+
+@pytest.mark.django_db
+def test_timeseries_emite_dias_vazios_como_zero():
+    #Arrange - uma analise so, ha 4 dias; os outros dias nao existem no banco
+    fonte = ContentSource.objects.create(name="F", plataform="NEWS", external_id="UC_ts_3")
+    _analise_em(fonte, "ts3_0", timezone.localtime() - timedelta(days=4))
+
+    #Act
+    serie = get_sentiment_timeseries(fonte.id, days=5)
+
+    #assert - os 5 dias presentes, com zero explicito nos vazios. Sem isso o
+    #grafico liga o ponto de 4 dias atras direto no de hoje com uma reta,
+    #desenhando continuidade sobre o que na verdade foi silencio
+    assert len(serie) == 5
+    assert sum(p["POS"] for p in serie) == 1
+    assert [p["POS"] for p in serie].count(0) == 4
+
+
+@pytest.mark.django_db
+def test_timeseries_traz_media_de_polaridade_do_dia():
+    #Arrange - +1.0 e -1.0 no mesmo dia: media zero
+    fonte = ContentSource.objects.create(name="F", plataform="NEWS", external_id="UC_ts_4")
+    hoje = timezone.localtime()
+    _analise_em(fonte, "ts4_0", hoje, label="POS", score=1.0)
+    _analise_em(fonte, "ts4_1", hoje, label="NEG", score=-1.0)
+
+    #Act
+    serie = get_sentiment_timeseries(fonte.id, days=1)
+
+    #assert - e o avg_polarity que viabiliza um grafico de linha unica em vez
+    #de tres areas empilhadas
+    assert serie[0]["avg_polarity"] == 0.0
+
+
+@pytest.mark.django_db
+def test_timeseries_dia_vazio_tem_polaridade_none_e_nao_zero():
+    #Arrange - nada publicado em lugar nenhum
+    fonte = ContentSource.objects.create(name="F", plataform="NEWS", external_id="UC_ts_5")
+
+    #Act
+    serie = get_sentiment_timeseries(fonte.id, days=3)
+
+    #assert - None, e nao 0.0. Zero e uma polaridade VALIDA, que significa
+    #"opiniao medida e neutra"; um dia sem post nenhum nao mediu nada. Com 0.0
+    #a linha do grafico desceria ate o centro em todo dia de silencio,
+    #desenhando uma queda de sentimento que nunca aconteceu
+    assert all(p["avg_polarity"] is None for p in serie)
+    assert all(p["POS"] == 0 for p in serie)
+
+
+@pytest.mark.django_db
+def test_timeseries_usa_o_fuso_local_e_nao_utc():
+    #Arrange - post publicado as 23:30 no horario de Sao Paulo. Em UTC isso ja
+    #e 02:30 do DIA SEGUINTE (UTC-3)
+    fonte = ContentSource.objects.create(name="F", plataform="NEWS", external_id="UC_ts_6")
+    hoje_local = timezone.localdate()
+    tarde_da_noite = timezone.make_aware(
+        datetime.combine(hoje_local, dt_time(23, 30))
+    )
+    _analise_em(fonte, "ts6_0", tarde_da_noite)
+
+    #Act
+    serie = get_sentiment_timeseries(fonte.id, days=2)
+
+    #assert - o post conta no dia LOCAL em que foi publicado. Este teste passa
+    #verde se os posts do cenario forem criados no meio do dia, e so falha com
+    #horario de borda — que e por que ele existe com 23:30 fixo. Agrupar pela
+    #data do datetime que o ORM devolve (UTC) jogaria todo post depois das 21h
+    #para o dia seguinte, em silencio
+    por_dia = {p["date"]: p for p in serie}
+    assert por_dia[hoje_local.isoformat()]["POS"] == 1
+
+
+@pytest.mark.django_db
+def test_timeseries_sem_source_id_agrega_todas_as_fontes():
+    #Arrange - duas fontes, uma analise em cada, no mesmo dia
+    hoje = timezone.localtime()
+    for n in range(2):
+        f = ContentSource.objects.create(name=f"F{n}", plataform="NEWS", external_id=f"UC_ts_7_{n}")
+        _analise_em(f, f"ts7_{n}", hoje)
+
+    #Act - sem source_id
+    serie = get_sentiment_timeseries(days=1)
+
+    #assert
+    assert serie[0]["POS"] == 2

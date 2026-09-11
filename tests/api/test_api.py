@@ -375,3 +375,83 @@ def test_summary_sem_analise_nao_inventa_polaridade():
     assert response.data["sentiment"] is None
     assert response.data["avg_polarity"] is None
     assert response.data["histogram"] is None
+
+
+#----------------------SERIE TEMPORAL---------------------------
+
+@pytest.mark.django_db
+def test_timeseries_devolve_array_cru_e_nao_envelope_paginado():
+    #Arrange(cenario)
+    fonte = create_content_source(name="Canal", plataform="NEWS", external_id="UC_api_ts")
+
+    #Act(executa)
+    client = APIClient()
+    response = client.get(f"/api/analytics/timeseries/?source_id={fonte.id}&days=30")
+
+    #assert(verifica se o resultado bateu) - ESTA ROTA E EXCECAO a regra do
+    #envelope. A resposta e uma JANELA DE TAMANHO FIXO que o cliente pediu
+    #(days, com teto de 365), nao uma colecao ilimitada. Paginada em 20, uma
+    #serie de 30 dias viraria duas paginas e o grafico desenharia 20 dias
+    #achando que sao 30 — truncado, sem erro nenhum. O MOCK_TIMESERIES do front
+    #tambem e array cru
+    assert response.status_code == 200
+    assert isinstance(response.data, list)
+    assert len(response.data) == 30
+
+
+@pytest.mark.django_db
+def test_timeseries_tem_a_forma_que_o_grafico_espera():
+    #Arrange
+    fonte = create_content_source(name="Canal", plataform="NEWS", external_id="UC_api_ts2")
+    post = RawPost.objects.create(
+        source=fonte, external_id="api_ts2_0", text_content="x",
+        published_at=timezone.localtime(), is_processed=True,
+    )
+    SentimentAnalysis.objects.create(post=post, polarity_score=0.5, label="POS")
+
+    #Act
+    client = APIClient()
+    response = client.get(f"/api/analytics/timeseries/?source_id={fonte.id}&days=1")
+
+    #assert
+    ponto = response.data[0]
+    assert set(ponto) == {"date", "POS", "NEU", "NEG", "avg_polarity"}
+    assert ponto["date"] == timezone.localdate().isoformat()
+    assert ponto["POS"] == 1
+    assert ponto["avg_polarity"] == 0.5
+
+
+@pytest.mark.django_db
+def test_timeseries_limita_a_janela_pedida():
+    #Act - pede uma janela absurda
+    client = APIClient()
+    response = client.get("/api/analytics/timeseries/?days=999999")
+
+    #assert - o tamanho da resposta e ditado pelo PARAMETRO, nao pelo dado,
+    #porque os dias vazios sao preenchidos. Sem teto isto devolveria um milhao
+    #de linhas a partir de um banco vazio
+    assert response.status_code == 200
+    assert len(response.data) == 365
+
+
+@pytest.mark.django_db
+def test_timeseries_com_days_nao_numerico_retorna_400():
+    #Act
+    client = APIClient()
+    response = client.get("/api/analytics/timeseries/?days=abc")
+
+    #assert - mesma forma de erro do resto da API, e JSON e nao HTML
+    assert response.status_code == 400
+    assert "erro" in response.data
+
+
+@pytest.mark.django_db
+def test_timeseries_de_fonte_inexistente_retorna_404():
+    #Act
+    client = APIClient()
+    response = client.get("/api/analytics/timeseries/?source_id=999")
+
+    #assert - mesma decisao do summary: o id inexistente e bug de quem chama, e
+    #uma serie de zeros faria isso parecer uma fonte real e silenciosa
+    assert response.status_code == 404
+    assert "erro" in response.data

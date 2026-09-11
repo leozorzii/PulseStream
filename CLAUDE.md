@@ -17,7 +17,7 @@ tests/             pytest, mirrors the apps/ layout
 
 ```bash
 # backend (venv at ./venv)
-venv/Scripts/python.exe -m pytest          # 79 passed, 1 xfailed — fully offline
+venv/Scripts/python.exe -m pytest          # 84 passed, 1 xfailed — fully offline
 venv/Scripts/python.exe manage.py check
 
 # frontend (cd frontend)
@@ -225,7 +225,16 @@ these:
   `0.0` would read as "perfectly neutral opinion" about data that does not
   exist.
 - List endpoints answer with the DRF envelope — `{count, next, previous,
-  results}` — not a bare array. Page size is 20.
+  results}` — not a bare array. Page size is 20. **`/api/analytics/timeseries/`
+  is the one exception** and returns a bare array: its length is a window the
+  caller asked for (`days`, capped at 365), not an unbounded collection. Paged
+  at 20, a 30-day series would arrive as two pages and the chart would draw 20
+  days believing it had 30 — truncated, with no error.
+- `/api/analytics/timeseries/?source_id=&days=` returns one point per day,
+  oldest first, as `{date, POS, NEU, NEG, avg_polarity}`. Counts, not
+  percentages — percentages hide volume, and a day with 2 posts would read the
+  same as a day with 200. Days with no posts are emitted explicitly with zero
+  counts and `avg_polarity: null`.
 - `/api/sources/` carries `feed_url`, `last_collected_at`, `post_count`,
   `pending_count` and `sentiment` alongside the model fields. `sentiment` is
   `null` when the source has no analyses — same call as the summary endpoint, so
@@ -288,6 +297,25 @@ Expect **spikes, not a curve**: `polarity_score` is `(pos - neg) / (pos + neg)`
 with small integer counts, so real values are almost always
 `{-1, -0.5, -0.33, 0, 0.33, 0.5, 1}`, with a large spike at zero. That is the
 analyser, not the endpoint — #15 is what improves it.
+
+**Anything grouped by day must use `TruncDate`, never `.date()` in Python.**
+`USE_TZ = True` with `TIME_ZONE = America/Sao_Paulo`, so the ORM stores and
+returns UTC: calling `.date()` on what comes back pushes every post published
+after 21:00 local into the next day. `TruncDate` converts to `TIME_ZONE` first.
+This one passes green if the test creates posts at midday — the timeseries test
+pins a post at **23:30** for exactly that reason. The same goes for the filter
+bounds: `__date__gte` also honours `TIME_ZONE`, so the window and the grouping
+are cut in the same zone.
+
+An empty day gets `avg_polarity: null`, never `0.0`. Zero is a **valid**
+polarity meaning "opinion was measured and came out neutral"; a day with no
+posts measured nothing. With `0.0` the chart line drops to the centre on every
+silent day, drawing a sentiment crash that never happened. The counts, on the
+other hand, really are `0`.
+
+**Any endpoint that zero-fills needs a cap on the window**, because the response
+size is then driven by the parameter rather than by the data — `?days=1000000`
+would build a million rows out of an empty database. `MAX_DIAS_SERIE` is 365.
 
 **Pagination is applied by hand in each view.** `DEFAULT_PAGINATION_CLASS` in
 settings is read by the mixin the DRF *generics* use, and these views are plain
