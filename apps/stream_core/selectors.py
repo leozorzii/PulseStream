@@ -1,6 +1,6 @@
 from apps.stream_core.models import ContentSource,SentimentAnalysis, RawPost
 from collections import Counter #contador automatico
-from django.db.models import Avg, Count, Q
+from django.db.models import Avg, Count, Max, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from datetime import timedelta
@@ -514,3 +514,87 @@ def get_keyword_ranking(source_id=None, limit=20):
 
     ranking.sort(key=lambda item: (-item["count"], item["term"]))
     return ranking[:limit]
+
+
+def get_overview(days=7):
+    """Os numeros do cabecalho do painel, e a polaridade de duas janelas iguais.
+
+    COMO FUNCIONA
+    O sentimento e a polaridade media vem do get_sentiment_summary(None), o
+    mesmo que responde /api/analytics/summary/ sem source_id. Reaproveitar, e
+    nao recalcular, e o que garante que o KPI e o grafico do mesmo painel
+    concordem: dois calculos do "mesmo" numero divergem na primeira mudanca.
+    O resto sao tres consultas agregadas: total de posts, fontes (ativas e
+    ultima coleta juntas) e as duas medias de janela juntas.
+
+    POR QUE O TREND TRAZ AS DUAS MEDIAS, E NAO SO A ANTERIOR
+    A issue #29 sugeria comparar avg_polarity com a media do periodo anterior.
+    Mas avg_polarity e a media de TODO o historico: o delta compararia o
+    historico inteiro com uma semana, grandezas diferentes. O trend compara
+    duas janelas do MESMO tamanho, uma colada na outra, e devolve as duas —
+    o cliente subtrai.
+
+    POR QUE A JANELA E PARAMETRO
+    O painel tem seletor de 7, 30 e 90 dias. Um trend fixo em 7 contradiria o
+    seletor que esta na mesma tela. Teto de MAX_DIAS_SERIE pelo mesmo motivo
+    da serie temporal.
+
+    RECORTE POR published_at, NO FUSO DO PROJETO
+    Mesma regra da serie: a janela e de quando a opiniao foi publicada, nao de
+    quando foi processada, e __date respeita TIME_ZONE. Um .date() no valor UTC
+    jogaria o post das 23:30 para o dia seguinte — e, na borda, para a janela
+    errada.
+
+    Args:
+        days (int): tamanho de cada janela do trend, limitado a [1, MAX_DIAS_SERIE]
+
+    Returns:
+        dict: {"total_posts", "analyzed_posts", "pending_posts",
+            "active_sources", "sentiment", "avg_polarity", "last_collected_at",
+            "trend": {"window_days", "avg_polarity_current_period",
+            "avg_polarity_previous_period"}}. sentiment, avg_polarity,
+            last_collected_at e as medias do trend sao None quando nao ha o que
+            medir — zero seria uma medida que nao aconteceu
+    """
+    days = max(1, min(int(days), MAX_DIAS_SERIE))
+
+    resumo = get_sentiment_summary(None)
+
+    fontes = ContentSource.objects.aggregate(
+        ativas=Count("id", filter=Q(is_active=True)),
+        ultima_coleta=Max("last_collected_at"),
+    )
+
+    #janela atual: os ultimos `days` dias ate hoje, inclusive. Anterior: os
+    #`days` dias colados antes dela. Mesmo tamanho, sem sobreposicao
+    fim_atual = timezone.localdate()
+    inicio_atual = fim_atual - timedelta(days=days - 1)
+    fim_anterior = inicio_atual - timedelta(days=1)
+    inicio_anterior = fim_anterior - timedelta(days=days - 1)
+
+    #as duas medias numa consulta so, cada uma com seu filtro
+    janelas = SentimentAnalysis.objects.aggregate(
+        atual=Avg("polarity_score", filter=Q(
+            post__published_at__date__gte=inicio_atual,
+            post__published_at__date__lte=fim_atual,
+        )),
+        anterior=Avg("polarity_score", filter=Q(
+            post__published_at__date__gte=inicio_anterior,
+            post__published_at__date__lte=fim_anterior,
+        )),
+    )
+
+    return {
+        "total_posts": RawPost.objects.count(),
+        "analyzed_posts": resumo["total_analyzed"],
+        "pending_posts": resumo["total_pending"],
+        "active_sources": fontes["ativas"],
+        "sentiment": resumo["sentiment"],
+        "avg_polarity": resumo["avg_polarity"],
+        "last_collected_at": fontes["ultima_coleta"],
+        "trend": {
+            "window_days": days,
+            "avg_polarity_current_period": janelas["atual"],
+            "avg_polarity_previous_period": janelas["anterior"],
+        },
+    }
