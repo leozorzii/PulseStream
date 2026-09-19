@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from apps.stream_core.models import ContentSource, RawPost
+from apps.stream_core.models import ContentSource, RawPost, SentimentAnalysis
 
 class ContentSourceSerializer(serializers.ModelSerializer):
     """Serializa objetos ContentSource para JSON e vice-versa.
@@ -70,3 +70,50 @@ class RawPostSerializer(serializers.ModelSerializer):
     class Meta:
         model = RawPost
         fields = ["id", "source", "external_id", "text_content", "published_at", "is_processed"]
+
+
+class FonteResumidaSerializer(serializers.ModelSerializer):
+    """So o que um item do feed precisa saber da fonte dele."""
+
+    class Meta:
+        model = ContentSource
+        fields = ["id", "name", "plataform"]
+
+
+class AnaliseSerializer(serializers.ModelSerializer):
+    """O sentimento de um post: label, intensidade e keywords.
+
+    polarity_score e a razao de existir deste serializer para a #25: o label
+    sozinho junta "morno" e "polarizado" no mesmo balde, e a intensidade e o
+    que separa os dois.
+    """
+
+    class Meta:
+        model = SentimentAnalysis
+        fields = ["label", "polarity_score", "extracted_keywords"]
+
+
+class PostAnalisadoSerializer(serializers.ModelSerializer):
+    """Um post junto do sentimento que recebeu — o item do feed de evidencias.
+
+    POR QUE A FONTE VAI ANINHADA
+    RawPostSerializer devolve "source": 1, e o cliente teria que cruzar o id
+    com /api/sources/. Aquela rota lista so as fontes ATIVAS por padrao, entao
+    o post de uma fonte pausada resolveria para nada. Aninhado, o item se
+    explica sozinho.
+
+    EXIGE O QUERYSET DO get_analyzed_posts()
+    source e sentiment sao lidos da instancia; sem o select_related do selector
+    cada post custaria duas consultas a mais. E sentiment nao e opcional aqui:
+    o selector so devolve post que tem analise.
+    """
+
+    source = FonteResumidaSerializer(read_only=True)
+    sentiment = AnaliseSerializer(read_only=True)
+
+    class Meta:
+        model = RawPost
+        fields = [
+            "id", "external_id", "text_content", "author", "engagement_score",
+            "published_at", "source", "sentiment",
+        ]

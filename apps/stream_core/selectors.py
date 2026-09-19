@@ -95,6 +95,46 @@ def get_unprocessed_posts():
     return RawPost.objects.filter(is_processed=False).order_by("published_at")
 
 
+def get_analyzed_posts(source_id=None, label=None):
+    """Posts que ja tem analise, junto da analise e da fonte, do mais novo ao mais antigo.
+
+    COMO FUNCIONA
+    Filtra pelos posts com SentimentAnalysis (o feed de evidencias so tem o que
+    mostrar de post analisado) e, opcionalmente, por fonte e por label. A fonte
+    e a analise vem no MESMO JOIN via select_related, entao uma pagina custa
+    uma consulta so, qualquer que seja o numero de posts nela. Sem isso o
+    serializer faria duas consultas por post — 40 idas ao banco por pagina.
+
+    POR QUE sentiment__isnull E NAO is_processed
+    is_processed diz que o pipeline passou pelo post; a existencia da analise
+    diz que ha o que mostrar. Na operacao normal sao a mesma coisa, porque
+    save_sentiment_analysis grava os dois numa transacao so, mas apagar uma
+    analise pelo admin separa os dois — e ai um filtro por is_processed
+    serializaria um post sem sentimento, num feed cujo contrato diz que o
+    sentimento sempre existe.
+
+    POR QUE -id NO DESEMPATE
+    Posts coletados do mesmo feed chegam com o mesmo published_at com
+    frequencia. Sem um desempate unico a ordem entre eles fica a criterio do
+    banco, e o paginador pode repetir um post numa pagina e sumir com ele na
+    outra.
+
+    Args:
+        source_id (int | None): restringe a uma fonte; None traz todas, inclusive
+            as pausadas — o post ja coletado continua sendo evidencia
+        label (str | None): "POS", "NEU" ou "NEG"; None traz os tres
+
+    Returns:
+        QuerySet[RawPost]: posts com .source e .sentiment ja carregados
+    """
+    posts = RawPost.objects.filter(sentiment__isnull=False).select_related("source", "sentiment")
+    if source_id is not None:
+        posts = posts.filter(source_id=source_id)
+    if label is not None:
+        posts = posts.filter(sentiment__label=label)
+    return posts.order_by("-published_at", "-id")
+
+
 #Teto da janela da serie temporal. NAO e preciosismo: os dias vazios sao
 #preenchidos com zero em Python, entao o tamanho da resposta e ditado pelo
 #PARAMETRO e nao pelo dado — ?days=1000000 geraria um milhao de linhas a partir

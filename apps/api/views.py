@@ -1,14 +1,64 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from apps.stream_core.models import ContentSource
-from apps.api.serializers import ContentSourceSerializer, RawPostSerializer
+from apps.stream_core.models import ContentSource, SentimentAnalysis
+from apps.api.serializers import ContentSourceSerializer, RawPostSerializer, PostAnalisadoSerializer
 from apps.ingestion.adapters.rss import RSSAdapter
-from apps.stream_core.selectors import get_sources, get_unprocessed_posts, get_sentiment_summary, get_sentiment_timeseries
+from apps.stream_core.selectors import (
+    get_sources, get_unprocessed_posts, get_analyzed_posts, get_sentiment_summary, get_sentiment_timeseries,
+)
 from apps.ingestion.services import run_ingestion
 from rest_framework import status
 from apps.ingestion.exceptions import FeedFetchError
 from apps.ingestion.tasks import processar_sentimentos
 from apps.api.pagination import StandardPagination
+
+
+#labels aceitos no filtro do feed; sai das choices do model para nao divergir
+LABELS_VALIDOS = {codigo for codigo, _rotulo in SentimentAnalysis.SENTIMENTOS}
+
+
+def _ler_source_id(request):
+    """Le e valida o ?source_id opcional, do jeito que toda rota de leitura faz.
+
+    Extraido quando a terceira view (o feed) ia copiar o mesmo bloco pela
+    terceira vez. Tres copias de uma regra de contrato divergem: basta uma
+    delas esquecer o 404 para um id errado voltar a parecer fonte vazia.
+
+    - ausente: None, escopo geral
+    - vazio ou nao numerico: 400. Vazio e o que um <select> sem selecao emite;
+      houve intencao de escolher uma fonte, e responder com o escopo geral
+      mostraria dado global fingindo ser dado da fonte
+    - numero de fonte que nao existe: 404, nunca uma resposta vazia, que faria
+      um bug de quem chama parecer uma fonte real sem dados
+
+    Args:
+        request (Request): a requisicao do DRF
+
+    Returns:
+        tuple[int | None, Response | None]: (source_id, None) quando valido, ou
+            (None, resposta de erro) para a view devolver direto
+    """
+    source_id = request.query_params.get("source_id")
+    if source_id is None:
+        return None, None
+
+    #coage ANTES de consultar: filter(id="abc") levanta ValueError dentro do
+    #ORM e vira 500 com corpo HTML, que o cliente le como falha de parse
+    try:
+        source_id = int(source_id)
+    except ValueError:
+        return None, Response(
+            {"erro": "source_id deve ser um numero inteiro"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if not ContentSource.objects.filter(id=source_id).exists():
+        return None, Response(
+            {"erro": "fonte nao encontrada"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    return source_id, None
+
 class SourceListView(APIView):
     """Endpoint que lista as fontes de conteudo (GET ?include_inactive opcional)."""
     #responde a requisicoes GET
@@ -60,6 +110,48 @@ class UnprocessedPostsListView(APIView):
         serializer = RawPostSerializer(pagina, many=True)
         return paginator.get_paginated_response(serializer.data)
     
+class AnalyzedPostsListView(APIView):
+    """Feed de evidencias: posts com o sentimento que receberam (GET), paginado."""
+
+    def get(self, request):
+        """Retorna os posts analisados, do mais novo ao mais antigo.
+
+        Filtros opcionais: ?source_id= (mesma validacao das outras rotas) e
+        ?label=POS|NEU|NEG, sem diferenciar maiusculas. O filtro por label e o
+        que faz "me mostra os negativos" ser uma requisicao so, em vez de baixar
+        tudo e filtrar no cliente.
+
+        Label vazio ou fora dos tres e 400, e nao "sem filtro": um label
+        digitado errado devolvendo tudo faria o painel mostrar posts positivos
+        embaixo do titulo "negativos".
+
+        Paginada como as outras listas: o feed e ilimitado por natureza. A
+        pagina e fatiada ANTES de serializar, entao o LIMIT chega ao banco.
+
+        Returns:
+            Response: envelope paginado, 400 se source_id ou label forem
+                invalidos, ou 404 se a fonte nao existir
+        """
+        source_id, erro = _ler_source_id(request)
+        if erro:
+            return erro
+
+        label = request.query_params.get("label")
+        if label is not None:
+            label = label.upper()
+            if label not in LABELS_VALIDOS:
+                return Response(
+                    {"erro": "label deve ser POS, NEU ou NEG"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        posts = get_analyzed_posts(source_id=source_id, label=label)
+        paginator = StandardPagination()
+        pagina = paginator.paginate_queryset(posts, request)
+        serializer = PostAnalisadoSerializer(pagina, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+
 class SentimentSummaryView(APIView):
     """Endpoint que retorna o resumo de sentimento (GET ?source_id opcional)"""
 
@@ -98,22 +190,9 @@ class SentimentSummaryView(APIView):
             Response: 200 com o contrato do resumo, 400 se o source_id for
                 invalido (nao numerico ou vazio) ou 404 se a fonte nao existir
         """
-        source_id = request.query_params.get("source_id") #pega o ?source_id
-
-        if source_id is not None:
-            try:
-                source_id = int(source_id)
-            except ValueError:
-                return Response(
-                    {"erro": "source_id deve ser um numero inteiro"},
-                    status=status.HTTP_400_BAD_REQUEST, #req mal informada
-                )
-
-            if not ContentSource.objects.filter(id=source_id).exists():
-                return Response(
-                    {"erro": "fonte nao encontrada"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
+        source_id, erro = _ler_source_id(request)
+        if erro:
+            return erro
 
         resumo = get_sentiment_summary(source_id) #seletor
         return Response(resumo) #o dict vira JSON
@@ -144,22 +223,9 @@ class SentimentTimeseriesView(APIView):
             Response: 200 com a lista de pontos, 400 se days ou source_id forem
                 invalidos, ou 404 se a fonte nao existir
         """
-        source_id = request.query_params.get("source_id")
-
-        if source_id is not None:
-            try:
-                source_id = int(source_id)
-            except ValueError:
-                return Response(
-                    {"erro": "source_id deve ser um numero inteiro"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            if not ContentSource.objects.filter(id=source_id).exists():
-                return Response(
-                    {"erro": "fonte nao encontrada"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
+        source_id, erro = _ler_source_id(request)
+        if erro:
+            return erro
 
         #o default de 30 vive aqui, na fronteira HTTP, e nao no selector: e uma
         #escolha de produto (um mes de tendencia), nao regra de dominio
