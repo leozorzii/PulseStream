@@ -5,6 +5,7 @@ from apps.api.serializers import ContentSourceSerializer, RawPostSerializer, Pos
 from apps.ingestion.adapters.rss import RSSAdapter
 from apps.stream_core.selectors import (
     get_sources, get_unprocessed_posts, get_analyzed_posts, get_sentiment_summary, get_sentiment_timeseries,
+    get_keyword_ranking,
 )
 from apps.ingestion.services import run_ingestion
 from rest_framework import status
@@ -239,6 +240,44 @@ class SentimentTimeseriesView(APIView):
 
         serie = get_sentiment_timeseries(source_id=source_id, days=days)
         return Response(serie)
+
+
+class KeywordRankingView(APIView):
+    """Endpoint do ranking de palavras-chave (GET ?source_id &limit opcionais)"""
+
+    def get(self, request):
+        """Retorna os termos mais citados com o humor dominante de cada um.
+
+        POR QUE NAO PAGINA
+        Mesma excecao da serie temporal: e um ranking de tamanho que o proprio
+        cliente pediu (`limit`, com teto de 50 no selector), nao uma colecao
+        ilimitada. "Pagina 2 do top 20" nao e uma pergunta que faca sentido, e
+        o MOCK_KEYWORDS do front ja e array cru.
+
+        VALIDACAO
+        source_id pelo _ler_source_id, como as outras rotas. `limit` nao
+        numerico ou vazio e 400; numerico fora da faixa e ajustado pelo selector,
+        igual ao `days` da serie.
+
+        Returns:
+            Response: 200 com a lista (vazia se nao houver analise), 400 se
+                source_id ou limit forem invalidos, ou 404 se a fonte nao existir
+        """
+        source_id, erro = _ler_source_id(request)
+        if erro:
+            return erro
+
+        #o default de 20 vive na fronteira HTTP: e o tamanho de um grafico
+        #legivel, escolha de produto e nao regra de dominio
+        try:
+            limit = int(request.query_params.get("limit", 20))
+        except ValueError:
+            return Response(
+                {"erro": "limit deve ser um numero inteiro"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(get_keyword_ranking(source_id=source_id, limit=limit))
 
 
 class TriggerIngestionView(APIView):

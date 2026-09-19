@@ -445,3 +445,72 @@ def get_sentiment_summary(source_id=None):
         "histogram": histogram,
     }
     
+
+
+#Teto do ranking de keywords. Mesmo motivo do MAX_DIAS_SERIE: o tamanho da
+#resposta e ditado pelo parametro. 50 barras ja nao cabem num grafico legivel;
+#acima disso o pedido e engano de quem chama, nao uma tela real.
+MAX_KEYWORDS = 50
+
+
+def get_keyword_ranking(source_id=None, limit=20):
+    """Os termos mais citados nas analises e o humor dominante de cada um.
+
+    COMO FUNCIONA
+    Busca so duas colunas de cada analise — extracted_keywords e label — numa
+    consulta, e conta em Python: para cada termo, em quantas analises ele
+    aparece e com qual label. Cada analise guarda no maximo cinco termos, ja
+    sem repeticao (saem de um Counter.most_common), entao a contagem de um
+    termo e o numero de POSTS que o citam.
+
+    POR QUE A CONTAGEM E EM PYTHON E NAO NO BANCO
+    extracted_keywords e um JSONField com uma lista. Desaninhar lista JSON em
+    linhas (jsonb_array_elements no Postgres, json_each no SQLite) nao tem
+    expressao portavel no ORM, e o projeto roda em SQLite. O custo e trazer
+    duas colunas de cada analise do escopo para a memoria: linear no numero
+    de analises. Se isso pesar, o caminho e uma tabela de termos gravada no
+    momento da analise, nao SQL cru aqui.
+
+    DOMINANT_LABEL E EMPATE
+    O label vencedor e o de maior contagem. Empate no topo e NEU — mesma regra
+    do classificador, onde empate entre palavras positivas e negativas tambem
+    e neutro. Escolher um lado pintaria de uma cor so um termo sobre o qual a
+    opiniao esta literalmente dividida.
+
+    ORDEM
+    Contagem decrescente, depois o termo em ordem alfabetica. Sem o desempate
+    a ordem entre termos empatados dependeria da ordem das linhas do banco, e
+    o grafico trocaria barras de lugar entre duas requisicoes iguais.
+
+    Args:
+        source_id (int | None): restringe a uma fonte; None e o banco todo
+        limit (int): quantos termos devolver, limitado a [1, MAX_KEYWORDS]
+
+    Returns:
+        list[dict]: [{"term", "count", "dominant_label"}], vazia se nao houver
+            analise no escopo
+    """
+    limit = max(1, min(int(limit), MAX_KEYWORDS))
+
+    analises = SentimentAnalysis.objects.all()
+    if source_id is not None:
+        analises = analises.filter(post__source_id=source_id)
+
+    #termo -> Counter de labels; a soma do Counter e a contagem do termo
+    por_termo = {}
+    for keywords, label in analises.values_list("extracted_keywords", "label"):
+        for termo in keywords:
+            por_termo.setdefault(termo, Counter())[label] += 1
+
+    ranking = []
+    for termo, labels in por_termo.items():
+        (primeiro, maior), *resto = labels.most_common()
+        empatado = any(contagem == maior for _label, contagem in resto)
+        ranking.append({
+            "term": termo,
+            "count": sum(labels.values()),
+            "dominant_label": "NEU" if empatado else primeiro,
+        })
+
+    ranking.sort(key=lambda item: (-item["count"], item["term"]))
+    return ranking[:limit]
