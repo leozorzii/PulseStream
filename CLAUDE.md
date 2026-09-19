@@ -244,6 +244,15 @@ these:
   default is still active-only. The comparison is against the string `"true"` —
   a query param always arrives as text, and `"false"` is a non-empty string, so
   a plain truthiness check would read `?include_inactive=false` as a yes.
+- `/api/posts/?source_id=&label=` is the evidence feed: only posts that **have**
+  an analysis (filtered on the analysis existing, not on `is_processed`),
+  newest first, with `source` **nested** as `{id, name, plataform}` and
+  `sentiment` as `{label, polarity_score, extracted_keywords}` — never `null`.
+  Posts from paused sources are included; that is why the source is nested
+  rather than an id to join against `/api/sources/`, which hides them. `label`
+  is case-insensitive, and an empty or unknown one is a **400**, not "no
+  filter": a typo returning everything would put positive posts under a
+  "negative" heading.
 - The trigger endpoint does a **synchronous** feed fetch inside the request, and
   sentiment is *not* ready when its 200 returns (Celery runs after).
 
