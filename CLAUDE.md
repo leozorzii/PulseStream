@@ -226,10 +226,15 @@ these:
   exist.
 - List endpoints answer with the DRF envelope — `{count, next, previous,
   results}` — not a bare array. Page size is 20. **`/api/analytics/timeseries/`
-  is the one exception** and returns a bare array: its length is a window the
-  caller asked for (`days`, capped at 365), not an unbounded collection. Paged
-  at 20, a 30-day series would arrive as two pages and the chart would draw 20
-  days believing it had 30 — truncated, with no error.
+  and `/api/analytics/keywords/` are the exceptions** and return a bare array:
+  their length is a size the caller asked for (`days`, capped at 365; `limit`,
+  capped at 50), not an unbounded collection. Paged at 20, a 30-day series
+  would arrive as two pages and the chart would draw 20 days believing it had
+  30 — truncated, with no error.
+- `/api/analytics/keywords/?source_id=&limit=` answers `{term, count,
+  dominant_label}`, count descending then term ascending. `count` is the number
+  of analyses citing the term. A **tie** for the top label is `NEU` — same rule
+  as the classifier, where a tie between charged words is neutral.
 - `/api/analytics/timeseries/?source_id=&days=` returns one point per day,
   oldest first, as `{date, POS, NEU, NEG, avg_polarity}`. Counts, not
   percentages — percentages hide volume, and a day with 2 posts would read the
