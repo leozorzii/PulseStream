@@ -12,16 +12,28 @@ import type { SentimentLabel } from "@/lib/sentiment"
  */
 
 // ---------------------------------------------------------------- overview
-/** GET /api/analytics/overview/ — issue #29 */
+/** GET /api/analytics/overview/?days= — issue #29.
+ *
+ *  Os campos anuláveis são null quando não há o que medir: banco sem análise,
+ *  fonte nunca coletada, janela sem post. Zero seria uma medida que não
+ *  aconteceu — polaridade 0,00 lê como "opinião perfeitamente neutra".
+ *
+ *  O trend traz as DUAS médias, de janelas do mesmo tamanho (`days`, o do
+ *  seletor de período), e o delta é a subtração delas. Comparar avg_polarity,
+ *  que é o histórico inteiro, com uma semana misturaria grandezas diferentes. */
 export type Overview = {
   total_posts: number
   analyzed_posts: number
   pending_posts: number
   active_sources: number
-  sentiment: Record<SentimentLabel, number>
-  avg_polarity: number
-  last_collected_at: string
-  trend: { avg_polarity_previous_period: number; window_days: number }
+  sentiment: Record<SentimentLabel, number> | null
+  avg_polarity: number | null
+  last_collected_at: string | null
+  trend: {
+    window_days: number
+    avg_polarity_current_period: number | null
+    avg_polarity_previous_period: number | null
+  }
 }
 
 export const MOCK_OVERVIEW: Overview = {
@@ -32,7 +44,7 @@ export const MOCK_OVERVIEW: Overview = {
   sentiment: { POS: 58.3, NEU: 27.1, NEG: 14.6 },
   avg_polarity: 0.28,
   last_collected_at: "2026-09-02T16:45:00-03:00",
-  trend: { avg_polarity_previous_period: 0.21, window_days: 7 },
+  trend: { window_days: 7, avg_polarity_current_period: 0.31, avg_polarity_previous_period: 0.21 },
 }
 
 // -------------------------------------------------------------- timeseries

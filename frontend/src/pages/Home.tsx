@@ -58,7 +58,11 @@ export default function Home() {
       <Hero
         selo={{
           primario: `${fontesAtivas} ${fontesAtivas === 1 ? "fonte ativa" : "fontes ativas"}`,
-          secundario: `última coleta ${haQuantoTempo(MOCK_OVERVIEW.last_collected_at, agora)}`,
+          // null é "nunca coletou", que não é "coletou faz tempo": sem o
+          // ternário o selo diria "última coleta há NaN" num banco novo
+          secundario: MOCK_OVERVIEW.last_collected_at
+            ? `última coleta ${haQuantoTempo(MOCK_OVERVIEW.last_collected_at, agora)}`
+            : "nenhuma coleta ainda",
           href: "visao-geral",
         }}
       />
@@ -127,12 +131,16 @@ export default function Home() {
             linhas={[
               {
                 label: "Última coleta",
-                valor: new Date(MOCK_OVERVIEW.last_collected_at).toLocaleString("pt-BR", {
-                  day: "2-digit",
-                  month: "short",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
+                // new Date(null) é 1970, não um erro: sem o ternário o card
+                // afirmaria uma coleta em 31 de dezembro de 1969
+                valor: MOCK_OVERVIEW.last_collected_at
+                  ? new Date(MOCK_OVERVIEW.last_collected_at).toLocaleString("pt-BR", {
+                      day: "2-digit",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "nunca",
               },
               {
                 label: "Pausadas",

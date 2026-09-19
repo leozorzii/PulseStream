@@ -5,10 +5,10 @@ from apps.api.serializers import ContentSourceSerializer, RawPostSerializer, Pos
 from apps.ingestion.adapters.rss import RSSAdapter
 from apps.stream_core.selectors import (
     get_sources, get_unprocessed_posts, get_analyzed_posts, get_sentiment_summary, get_sentiment_timeseries,
-    get_keyword_ranking,
+    get_keyword_ranking, get_overview,
 )
 from apps.ingestion.services import run_ingestion
-from rest_framework import status
+from rest_framework import serializers, status
 from apps.ingestion.exceptions import FeedFetchError
 from apps.ingestion.tasks import processar_sentimentos
 from apps.api.pagination import StandardPagination
@@ -278,6 +278,40 @@ class KeywordRankingView(APIView):
             )
 
         return Response(get_keyword_ranking(source_id=source_id, limit=limit))
+
+
+class OverviewView(APIView):
+    """Endpoint dos numeros do cabecalho do painel (GET ?days opcional)"""
+
+    def get(self, request):
+        """Retorna os totais globais e a polaridade de duas janelas iguais.
+
+        `days` e o tamanho de cada janela do trend: padrao 7, teto de 365 no
+        selector, e 400 se nao for numero — mesma regra da serie temporal.
+
+        last_collected_at passa pelo DateTimeField do DRF, e nao vai como
+        datetime cru: e o que /api/sources/ ja usa para o mesmo campo, entao as
+        duas rotas escrevem o horario do mesmo jeito (fuso do projeto). O
+        encoder JSON formataria o valor em UTC, e o cliente veria dois
+        horarios diferentes para a mesma coleta.
+
+        Returns:
+            Response: 200 com o overview, ou 400 se days for invalido
+        """
+        try:
+            days = int(request.query_params.get("days", 7))
+        except ValueError:
+            return Response(
+                {"erro": "days deve ser um numero inteiro"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        overview = get_overview(days=days)
+        if overview["last_collected_at"] is not None:
+            overview["last_collected_at"] = serializers.DateTimeField().to_representation(
+                overview["last_collected_at"]
+            )
+        return Response(overview)
 
 
 class TriggerIngestionView(APIView):

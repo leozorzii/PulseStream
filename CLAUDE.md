@@ -235,6 +235,14 @@ these:
   dominant_label}`, count descending then term ascending. `count` is the number
   of analyses citing the term. A **tie** for the top label is `NEU` — same rule
   as the classifier, where a tie between charged words is neutral.
+- `/api/analytics/overview/?days=` is the KPI row. `sentiment` and
+  `avg_polarity` come from the global summary **by reuse**, so the two routes
+  agree by construction. `trend` carries **both** `avg_polarity_current_period`
+  and `avg_polarity_previous_period`, two adjacent windows of `days` (default 7,
+  capped at 365) cut on `published_at` in `TIME_ZONE`; the delta is their
+  difference. It is **not** `avg_polarity` minus the previous period —
+  `avg_polarity` is all-time. `sentiment`, `avg_polarity`, `last_collected_at`
+  and both trend averages are `null` when there is nothing to measure.
 - `/api/analytics/timeseries/?source_id=&days=` returns one point per day,
   oldest first, as `{date, POS, NEU, NEG, avg_polarity}`. Counts, not
   percentages — percentages hide volume, and a day with 2 posts would read the
